@@ -9,6 +9,16 @@ import kotlinx.coroutines.launch
 import ru.n08i40k.poco.triggers.proto.settings
 
 class Application : Application() {
+    companion object {
+        private var instance: ru.n08i40k.poco.triggers.Application? = null
+
+        val applicationContext get() = instance!!.applicationContext
+    }
+
+    init {
+        instance = this
+    }
+
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
     lateinit var triggers: Triggers

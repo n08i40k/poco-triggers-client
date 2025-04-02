@@ -1,12 +1,7 @@
 package ru.n08i40k.poco.triggers
 
 import android.app.AlertDialog
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
 import android.os.Bundle
-import android.provider.Settings
-import android.text.TextUtils
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,6 +45,8 @@ class MainActivity : ComponentActivity() {
                 .cmd("pm grant ru.n08i40k.poco.triggers android.permission.SYSTEM_ALERT_WINDOW")
                 .exec()
         }
+
+        Log.d("TEST", applicationContext.applicationInfo.sourceDir)
 
         setContent {
             AppTheme {

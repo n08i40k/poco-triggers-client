@@ -4,11 +4,12 @@ import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import ru.n08i40k.poco.triggers.Application.Companion.applicationContext
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-private const val DAEMON_PATH = "/data/local/tmp/triggers-daemon"
+private const val DAEMON_PATH = "/data/local/tmp/poco-triggers-daemon"
 
 private data class DaemonMessage(
     val trigger: Short,
@@ -63,8 +64,16 @@ class TouchEmulator {
     }
 
     private val daemon by lazy {
+        val baseApk = applicationContext.applicationInfo.sourceDir
+
+        daemonShell.newJob().add(
+            "rm -f /data/local/tmp/poco-triggers-daemon",
+            "unzip -p $baseApk assets/bin/poco-triggers-daemon > /data/local/tmp/poco-triggers-daemon",
+            "chmod +x /data/local/tmp/poco-triggers-daemon"
+        ).exec()
+
         daemonShell.newJob().add(DAEMON_PATH).submit()
-        Thread.sleep(3_000)
+        Thread.sleep(2_000)
     }
 
     private val daemonClient by lazy {

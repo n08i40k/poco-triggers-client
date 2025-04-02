@@ -1,5 +1,7 @@
+import com.android.build.gradle.internal.tasks.factory.dependsOn
 import com.google.protobuf.gradle.id
 import com.google.protobuf.gradle.proto
+import org.gradle.internal.extensions.stdlib.capitalized
 
 plugins {
     alias(libs.plugins.android.application)
@@ -18,16 +20,35 @@ android {
         applicationId = "ru.n08i40k.poco.triggers"
         minSdk = 33
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            //noinspection ChromeOsAbiSupport
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -50,6 +71,8 @@ android {
             proto {
                 srcDir("src/main/proto")
             }
+
+            assets.srcDirs("build/generated/assets")
         }
         getByName("test") {
             proto {
@@ -61,6 +84,43 @@ android {
                 srcDir("src/androidTest/proto")
             }
         }
+    }
+
+    applicationVariants.all {
+        val buildTypeFolder =
+            if (buildType.name.lowercase() == "debug") "Debug" else "RelWithDebInfo"
+
+        val taskName =
+            "copyPocoTriggersDaemon${name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }}"
+
+        tasks.register<Copy>(taskName) {
+            from(provider {
+                val cxxDir = file("${projectDir}/build/intermediates/cxx/$buildTypeFolder")
+
+                if (!cxxDir.exists())
+                    throw GradleException("Папка $cxxDir не существует!")
+
+                val buildIdDirs = cxxDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
+
+                if (buildIdDirs.isEmpty())
+                    throw GradleException("Нет доступных build_id директорий в $cxxDir")
+
+                val lastCreatedDir = buildIdDirs.maxByOrNull { it.lastModified() }
+                    ?: throw GradleException("Не удалось определить последнюю директорию в $cxxDir")
+
+                val sourceFile = file("${lastCreatedDir.path}/obj/arm64-v8a/poco-triggers-daemon")
+
+                if (!sourceFile.exists())
+                    throw GradleException("Файл poco-triggers-daemon не найден в ${lastCreatedDir.path}")
+
+                listOf(sourceFile)
+            })
+
+            into("${layout.buildDirectory}/generated/assets/bin")
+            rename { "poco-triggers-daemon" }
+        }.dependsOn("package${buildType.name.capitalized()}").dependsOn("buildCMake$buildTypeFolder[arm64-v8a]")
+
+        assembleProvider.get().dependsOn(taskName)
     }
 }
 
