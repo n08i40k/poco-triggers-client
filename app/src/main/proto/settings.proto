@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option java_package = "ru.n08i40k.poco.triggers";
+option java_multiple_files = true;
+
+message ClickPos {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message Trigger {
+  bool enabled = 1;
+  ClickPos pos = 2;
+}
+
+// это можно сделать списком, но почему бы и нет
+// хотя я передумал, нельзя. не хочу путаться в индексах
+message Triggers {
+  Trigger upper = 1;
+  Trigger lower = 2;
+}
+
+message Settings {
+  Triggers triggers = 1;
+}
