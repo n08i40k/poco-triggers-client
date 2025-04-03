@@ -6,4 +6,8 @@
     <string name="root_required_title">Root rights required!</string>
     <string name="root_required_message">For the application to work, you must allow the application to use root rights.</string>
     <string name="exit">Exit</string>
+    <string name="overlay_channel_name">Overlay status</string>
+    <string name="overlay_channel_description">Status noifications for overlay</string>
+    <string name="overlay_status_title">Overlay is running...</string>
+    <string name="overlay_status_desc">Ignore this ;)</string>
 </resources>

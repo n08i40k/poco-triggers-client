@@ -4,14 +4,15 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Bundle
+import android.os.CombinedVibration
 import android.os.IBinder
+import android.os.VibrationEffect
+import android.os.VibratorManager
 import android.view.Gravity
 import android.view.WindowManager
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.platform.ComposeView
-import androidx.core.view.WindowCompat
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
@@ -21,6 +22,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import ru.n08i40k.poco.triggers.R
 import ru.n08i40k.poco.triggers.ui.overlay.AppOverlay
 
 private class MyLifecycleOwner : SavedStateRegistryOwner {
@@ -65,8 +67,36 @@ class OverlayService : Service() {
         return null
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
+
     override fun onCreate() {
         super.onCreate()
+
+        startForeground(
+            1,
+            NotificationCompat
+                .Builder(this, "OVERLAY")
+                .setContentTitle(getString(R.string.overlay_status_title))
+                .setContentText(getString(R.string.overlay_status_desc))
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSilent(true)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+        )
+
+        val vibratorManager = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
+        vibratorManager.vibrate(
+            CombinedVibration.createParallel(
+                VibrationEffect.createWaveform(
+                    longArrayOf(100, 100, 100, 100),
+                    intArrayOf(255, 200, 170, 150),
+                    -1
+                )
+            )
+        )
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 

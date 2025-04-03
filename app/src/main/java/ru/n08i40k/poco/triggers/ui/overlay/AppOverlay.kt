@@ -38,7 +38,7 @@ import ru.n08i40k.poco.triggers.ClickPos
 import ru.n08i40k.poco.triggers.Settings
 import ru.n08i40k.poco.triggers.proto.settings
 import ru.n08i40k.poco.triggers.service.OverlayService
-import ru.n08i40k.poco.triggers.utility.TriggerType
+import ru.n08i40k.poco.triggers.touch.TriggerType
 
 private data class Trigger(
     val enabled: Boolean, val pos: Offset
@@ -91,7 +91,9 @@ fun AppOverlay() {
                         Settings.getDefaultInstance().toBuilder().setTriggers(app.triggers).build()
                     }
 
-                    val intent = Intent(context, OverlayService::class.java)
+                    app.sendSetting()
+
+                    val intent = Intent(context.applicationContext, OverlayService::class.java)
                     context.stopService(intent)
                 }
 

@@ -1,8 +1,9 @@
 package ru.n08i40k.poco.triggers
 
 import android.app.AlertDialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -15,38 +16,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.topjohnwu.superuser.Shell
 import ru.n08i40k.poco.triggers.ui.theme.AppTheme
 import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
+    private fun createNotificationChannel() {
+        val channel = NotificationChannel(
+            "OVERLAY",
+            getString(R.string.overlay_channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        channel.description = getString(R.string.overlay_channel_description)
+
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+            .createNotificationChannel(channel)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val shell = Shell.getShell()
-        shell.newJob().add("su").exec()
-
-        if (!shell.isRoot) {
+        try {
+            createNotificationChannel()
+        } catch (_: Exception) {
             AlertDialog
                 .Builder(this)
                 .setTitle(getString(R.string.root_required_title))
                 .setMessage(getString(R.string.root_required_message))
                 .setNeutralButton(getString(R.string.exit)) { _, _ -> exitProcess(1) }
                 .show()
-        } else {
-            Log.d("POCO-Triggers", "Auto-enable accessibility service using root-privileges...")
-            Shell
-                .cmd("settings put secure enabled_accessibility_services ru.n08i40k.poco.triggers/ru.n08i40k.poco.triggers.service.KeyInterceptorService")
-                .exec()
-
-            Log.d("POCO-Triggers", "Auto-grant draw over other apps permission...")
-            Shell
-                .cmd("pm grant ru.n08i40k.poco.triggers android.permission.SYSTEM_ALERT_WINDOW")
-                .exec()
         }
-
-        Log.d("TEST", applicationContext.applicationInfo.sourceDir)
 
         setContent {
             AppTheme {
