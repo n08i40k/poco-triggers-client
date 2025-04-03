@@ -19,8 +19,8 @@ android {
         applicationId = "ru.n08i40k.poco.triggers"
         minSdk = 33
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 5
+        versionName = "1.2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

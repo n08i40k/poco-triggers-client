@@ -108,12 +108,12 @@ class Application : Application() {
             }
 
             shell.newJob().add(
+                "pkill -f poco-triggers-daemon",
                 "rm -f /data/local/tmp/poco-triggers-daemon",
                 "unzip -p $baseApk assets/bin/poco-triggers-daemon > $DAEMON_PATH",
-                "chmod +x /data/local/tmp/poco-triggers-daemon"
+                "chmod +x /data/local/tmp/poco-triggers-daemon",
+                "nohup setsid $DAEMON_PATH > /data/local/tmp/poco-logs &"
             ).to(outHandler, errHandler).exec()
-
-            shell.newJob().add(DAEMON_PATH).to(outHandler, errHandler).submit()
 
             shell
         }.invoke()

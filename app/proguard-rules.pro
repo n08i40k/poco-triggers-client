@@ -19,3 +19,7 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+-keepclassmembernames class ru.n08i40k.poco.triggers.service.OverlayService {
+    public *;
+}

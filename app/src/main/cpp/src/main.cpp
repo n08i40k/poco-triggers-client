@@ -130,7 +130,7 @@ main()
 
             const std::lock_guard lock{ mtx };
 
-            if (key == UPPER_CLICK_KEY) {
+            if (key == UPPER_CLICK_KEY && triggers_data.upper.enabled()) {
                 is_trigger_pressed[triggers_data.upper.index()] = pressed;
 
                 const touch_event touch_ev{
@@ -148,7 +148,7 @@ main()
                 return;
             }
 
-            if (key == LOWER_CLICK_KEY) {
+            if (key == LOWER_CLICK_KEY && triggers_data.lower.enabled()) {
                 is_trigger_pressed[triggers_data.lower.index()] = pressed;
 
                 const touch_event touch_ev{
@@ -197,7 +197,7 @@ main()
                             "sh",
                             "sh",
                             "-c",
-                            "am startservice "
+                            "am start-foreground-service "
                             "ru.n08i40k.poco.triggers/.service.OverlayService",
                             nullptr);
                         _exit(127);
