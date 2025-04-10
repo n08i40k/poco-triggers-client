@@ -1,3 +1,5 @@
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "OCUnusedMacroInspection"
 #define BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD
 
 #include "constants.h"
@@ -7,6 +9,7 @@
 #include "virt_device.h"
 #include "xm_watcher.h"
 
+#include <algorithm>
 #include <android/log.h>
 #include <arpa/inet.h>
 #include <array>
@@ -21,9 +24,175 @@
 #define LOG_ANDROID(...)                                                       \
     ((void)__android_log_print(ANDROID_LOG_INFO, "TriggersDaemon", __VA_ARGS__))
 
+enum trigger_index : std::uint8_t {
+    UPPER_TRIGGER = 0,
+    LOWER_TRIGGER,
+    TRIGGERS_COUNT,
+};
+
+using namespace std::chrono;
+
+struct trigger_data {
+    /**
+     * Is pressed.
+     */
+    bool pressed{};
+
+    /**
+     * Time point of last press.
+     */
+    system_clock::time_point press_tp{};
+
+    /**
+     * Settings provided by client.
+     */
+    trigger_settings ev_settings{};
+};
+
+class triggers_array : public std::array<trigger_data, TRIGGERS_COUNT>
+{
+public:
+    [[nodiscard]]
+    bool
+    any_pressed() const
+    {
+        return std::ranges::any_of(
+            *this, [](const auto& data) { return data.pressed; });
+    }
+
+    [[nodiscard]]
+    bool
+    pressed(const trigger_index index) const
+    {
+        return this->at(index).pressed;
+    }
+
+    [[nodiscard]]
+    trigger_data&
+    by_key(const std::uint32_t key)
+    {
+        switch (key) {
+        case UPPER_CLICK_KEY:
+        case UPPER_DISABLE_KEY:
+        case UPPER_ENABLE_KEY : return this->at(UPPER_TRIGGER);
+
+        case LOWER_CLICK_KEY  :
+        case LOWER_DISABLE_KEY:
+        case LOWER_ENABLE_KEY : return this->at(LOWER_TRIGGER);
+        default               : throw std::invalid_argument("Invalid key");
+        }
+    }
+
+    [[nodiscard]]
+    trigger_data&
+    by_key_inv(const std::uint32_t key)
+    {
+        switch (key) {
+        case UPPER_CLICK_KEY:
+        case UPPER_DISABLE_KEY:
+        case UPPER_ENABLE_KEY : return this->at(LOWER_TRIGGER);
+
+        case LOWER_CLICK_KEY  :
+        case LOWER_DISABLE_KEY:
+        case LOWER_ENABLE_KEY : return this->at(UPPER_TRIGGER);
+        default              : throw std::invalid_argument("Invalid key");
+        }
+    }
+};
+
+class endless_thread : public std::thread
+{
+public:
+    explicit endless_thread(const std::function<void()>& func)
+        : std::thread([func] {
+            // ReSharper disable once CppDFAEndlessLoop
+            while (true) func();
+        })
+    {
+    }
+};
+
 namespace
 {
+void
+try_open_overlay(const std::uint32_t key, triggers_array& triggers)
+{
+    auto&       cur_trigger = triggers.by_key(key);
+    const auto& inv_trigger = triggers.by_key_inv(key);
 
+    cur_trigger.press_tp = system_clock::now();
+
+    if (cur_trigger.press_tp - inv_trigger.press_tp > milliseconds(500))
+        return;
+
+    printf("Posting intent...\n");
+    fflush(stdout);
+
+    const auto pid = fork();
+
+    if (pid == -1) {
+        perror("fork");
+        return;
+    }
+
+    if (pid == 0) {
+        execlp(
+            "sh",
+            "sh",
+            "-c",
+            "am start-foreground-service "
+            "ru.n08i40k.poco.triggers/"
+            ".service.OverlayService",
+            nullptr);
+        _exit(127);
+    }
+
+    waitpid(pid, nullptr, 0);
+}
+
+struct trigger_click_ev {
+    trigger_index index;
+
+    bool pressed;
+    bool opposite_pressed;
+
+    bool screen_lock;
+    bool no_taps;
+
+    std::int32_t slot;
+};
+
+void
+on_trigger_click(
+    const std::int32_t        virt_fd,
+    std::vector<input_event>& locked_queue,
+    trigger_data&             trigger,
+    trigger_click_ev          event)
+{
+    auto& [index, pressed, opposite_pressed, screen_lock, no_taps, slot] =
+        event;
+
+    if (!(trigger.ev_settings.enabled || trigger.pressed))
+        return;
+
+    trigger.pressed = pressed;
+
+    const touch_event touch_ev{ .index          = index,
+                                .pressed        = pressed,
+                                .x              = trigger.ev_settings.x,
+                                .y              = trigger.ev_settings.y,
+                                .no_screen_taps = no_taps,
+                                .opposite_trigger_pressed = opposite_pressed,
+                                .current_slot             = slot };
+
+    if (const auto gen_evs = emulate_touch(touch_ev); screen_lock)
+        locked_queue.append_range(gen_evs);
+    else {
+        for (const auto& gen_ev : gen_evs)
+            if (write(virt_fd, &gen_ev, sizeof(gen_ev)) < 0)
+                perror("Failed to write event to uinput device");
+    }
+}
 } // namespace
 
 int
@@ -61,155 +230,65 @@ main()
 
     bool no_taps{ true };
 
-    std::array<bool, 2> is_trigger_pressed{ false };
-    std::array<std::chrono::system_clock::time_point, 2> trigger_enable_date{};
-
-    client_message triggers_data{};
+    triggers_array triggers{};
 
     input_event ev{};
     __s32       slot{};
 
-    // server thread
-    std::thread server_thread([&] {
-        server.work_thread([&](const client_message& message) {
-            printf("New triggers settings!\n");
-            fflush(stdout);
+    bool                     screen_lock{};
+    std::vector<input_event> locked_queue{};
 
-            if (message.lower.index() > 1) {
-                fprintf(
-                    stderr,
-                    "Invalid index passed to lower trigger settings: %d\n",
-                    message.lower.index());
-                fflush(stderr);
+    const auto on_server_message = [&](const client_message& message) {
+        printf("New triggers settings!\n");
+        fflush(stdout);
 
-                return;
-            }
+        const std::lock_guard lock{ mtx };
 
-            if (message.upper.index() > 1) {
-                fprintf(
-                    stderr,
-                    "Invalid index passed to upper trigger settings: %d\n",
-                    message.upper.index());
-                fflush(stderr);
+        triggers[UPPER_TRIGGER].ev_settings = message.upper;
+        triggers[LOWER_TRIGGER].ev_settings = message.lower;
+    };
 
-                return;
-            }
+    const auto on_virt_cycle = [&] {
+        if (read(virt.fd(), &ev, sizeof(ev)) != sizeof(ev))
+            return;
 
-            if (message.upper.index() == message.lower.index()) {
-                fprintf(
-                    stderr,
-                    "Same indexes on triggers not allowed: %d\n",
-                    message.upper.index());
-                fflush(stderr);
+        const std::lock_guard lock{ mtx };
 
-                return;
-            }
+        if (ev.type == EV_ABS && ev.code == ABS_MT_SLOT)
+            slot = ev.value;
+    };
 
-            const std::lock_guard lock{ mtx };
-            triggers_data = message;
-        });
-    });
+    const auto on_xm_ev = [&](const std::pair<std::uint16_t, bool>& event) {
+        const auto& [key, pressed] = event;
 
-    // all events
-    std::thread virt_thread([&] {
-        // ReSharper disable once CppDFAEndlessLoop
-        while (true) {
-            if (read(virt.fd(), &ev, sizeof(ev)) != sizeof(ev))
-                continue;
+        const std::lock_guard lock{ mtx };
 
-            const std::lock_guard lock{ mtx };
+        if (key == UPPER_CLICK_KEY || key == LOWER_CLICK_KEY) {
+            const trigger_click_ev click_ev{
+                .index = key == UPPER_CLICK_KEY ? UPPER_TRIGGER : LOWER_TRIGGER,
+                .pressed          = pressed,
+                .opposite_pressed = triggers.by_key_inv(key).pressed,
+                .screen_lock      = screen_lock,
+                .no_taps          = no_taps,
+                .slot             = slot
+            };
 
-            if (ev.type == EV_ABS && ev.code == ABS_MT_SLOT)
-                slot = ev.value;
+            on_trigger_click(
+                virt.fd(), locked_queue, triggers.by_key(key), click_ev);
+
+            return;
         }
-    });
 
-    std::thread xm_thread([&] {
-        xm.work_thread([&](const std::pair<std::uint16_t, bool>& event) {
-            const auto& [key, pressed] = event;
+        if (!pressed && (key == UPPER_ENABLE_KEY || key == LOWER_ENABLE_KEY))
+            try_open_overlay(key, triggers);
+    };
 
-            const std::lock_guard lock{ mtx };
-
-            if (key == UPPER_CLICK_KEY && triggers_data.upper.enabled()) {
-                is_trigger_pressed[triggers_data.upper.index()] = pressed;
-
-                const touch_event touch_ev{
-                    .index          = triggers_data.upper.index(),
-                    .pressed        = pressed,
-                    .x              = triggers_data.upper.x(),
-                    .y              = triggers_data.upper.y(),
-                    .no_screen_taps = no_taps,
-                    .another_trigger_pressed =
-                        is_trigger_pressed[triggers_data.upper.inv_index()],
-                    .current_slot = slot
-                };
-
-                emulate_touch(virt.fd(), touch_ev);
-                return;
-            }
-
-            if (key == LOWER_CLICK_KEY && triggers_data.lower.enabled()) {
-                is_trigger_pressed[triggers_data.lower.index()] = pressed;
-
-                const touch_event touch_ev{
-                    .index          = triggers_data.lower.index(),
-                    .pressed        = pressed,
-                    .x              = triggers_data.lower.x(),
-                    .y              = triggers_data.lower.y(),
-                    .no_screen_taps = no_taps,
-                    .another_trigger_pressed =
-                        is_trigger_pressed[triggers_data.lower.inv_index()],
-                    .current_slot = slot
-                };
-
-                emulate_touch(virt.fd(), touch_ev);
-                return;
-            }
-
-            if (!pressed
-                && (key == UPPER_ENABLE_KEY || key == LOWER_ENABLE_KEY)) {
-                const auto this_index = key == UPPER_ENABLE_KEY
-                                          ? triggers_data.upper.index()
-                                          : triggers_data.lower.index();
-
-                const auto another_index = key == UPPER_ENABLE_KEY
-                                             ? triggers_data.lower.index()
-                                             : triggers_data.upper.index();
-
-                trigger_enable_date[this_index] =
-                    std::chrono::system_clock::now();
-
-                if ((trigger_enable_date[this_index]
-                     - trigger_enable_date[another_index])
-                    < std::chrono::milliseconds(500)) {
-                    printf("Posting intent...\n");
-                    fflush(stdout);
-
-                    const auto pid = fork();
-
-                    if (pid == -1) {
-                        perror("fork");
-                        return;
-                    }
-
-                    if (pid == 0) {
-                        execlp(
-                            "sh",
-                            "sh",
-                            "-c",
-                            "am start-foreground-service "
-                            "ru.n08i40k.poco.triggers/.service.OverlayService",
-                            nullptr);
-                        _exit(127);
-                    }
-
-                    waitpid(pid, nullptr, 0);
-                }
-            }
-        });
-    });
+    auto           server_thread = server.start_thread(on_server_message);
+    endless_thread virt_thread(on_virt_cycle);
+    auto           xm_thread = xm.start_work_thread(on_xm_ev);
 
     // screen events
+    // ReSharper disable once CppDFAEndlessLoop
     while (true) {
         if (read(fts.fd(), &ev, sizeof(ev)) != sizeof(ev))
             continue;
@@ -220,18 +299,33 @@ main()
             && (ev.code == BTN_TOUCH || ev.code == BTN_TOOL_FINGER)) {
             no_taps = ev.value == 0;
 
-            // если прекращено нажатие на экран, а триггеры не зажаты
-            if (is_trigger_pressed[0] || is_trigger_pressed[1])
+            // если прекращено нажатие на экран, а триггеры зажаты
+            if (triggers.any_pressed())
                 continue;
         }
 
         if (write(virt.fd(), &ev, sizeof(ev)) < 0)
             perror("Failed to write event to uinput device");
+
+        if (ev.type != EV_SYN && ev.code != SYN_REPORT)
+            screen_lock = true;
+        else if (screen_lock) {
+            for (const auto& emu_ev : locked_queue)
+                if (write(virt.fd(), &emu_ev, sizeof(emu_ev)) < 0)
+                    perror("Failed to write event to uinput device");
+            locked_queue.clear();
+
+            screen_lock = false;
+        }
     }
 
+    // ReSharper disable CppDFAUnreachableCode
     server_thread.join();
     virt_thread.join();
     xm_thread.join();
 
     return 0;
+    // ReSharper restore CppDFAUnreachableCode
 }
+
+#pragma clang diagnostic pop

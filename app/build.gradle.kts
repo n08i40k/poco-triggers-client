@@ -1,14 +1,18 @@
 import com.google.protobuf.gradle.id
 import com.google.protobuf.gradle.proto
 import org.gradle.internal.extensions.stdlib.capitalized
+import java.util.Date
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 
-    kotlin("plugin.serialization") version "2.1.10"
-    id("com.google.protobuf") version "0.9.4"
+    kotlin("plugin.serialization")
+    id("com.google.protobuf")
+
+    id("com.google.devtools.ksp")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -28,6 +32,8 @@ android {
             //noinspection ChromeOsAbiSupport
             abiFilters += "arm64-v8a"
         }
+
+        buildConfigField("String", "BUILD_TIME", "\"${Date().toInstant().epochSecond}\"")
     }
 
     externalNativeBuild {
@@ -54,15 +60,19 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = "11"
     }
+
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     sourceSets {
@@ -127,6 +137,11 @@ dependencies {
 
     // run daemon as root
     implementation(libs.libsu.core)
+
+    // hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+    implementation(libs.androidx.hilt.navigation.compose)
 
     // default
     implementation(libs.androidx.core.ktx)

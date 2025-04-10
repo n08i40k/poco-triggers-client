@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <linux/input-event-codes.h>
+#include <thread>
 
 constexpr std::uint16_t UPPER_CLICK_KEY = KEY_F1;
 constexpr std::uint16_t LOWER_CLICK_KEY = KEY_F2;
@@ -21,13 +22,17 @@ class xm_watcher
 {
     std::int32_t fd_{};
 
+    void
+    work_thread(const std::function<void(std::pair<std::uint16_t, bool>&)>&
+                    on_event) const;
+
 public:
     xm_watcher();
 
     ~xm_watcher();
 
-    void
-    work_thread(
+    std::thread
+    start_work_thread(
         const std::function<void(std::pair<std::uint16_t, bool>&)>& on_event)
         const;
 

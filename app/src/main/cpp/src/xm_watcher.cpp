@@ -28,6 +28,13 @@ xm_watcher::~xm_watcher()
         close(fd_);
 }
 
+std::thread
+xm_watcher::start_work_thread(
+    const std::function<void(std::pair<std::uint16_t, bool>&)>& on_event) const
+{
+    return std::thread([this, on_event] { this->work_thread(on_event); });
+}
+
 void
 xm_watcher::work_thread(
     const std::function<void(std::pair<std::uint16_t, bool>&)>& on_event) const

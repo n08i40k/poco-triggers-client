@@ -44,7 +44,8 @@ server::server(const std::uint16_t port)
     address_.sin_addr.s_addr = INADDR_ANY;
     address_.sin_port        = htons(port);
 
-    if (bind(fd_, reinterpret_cast<sockaddr*>(&address_), sizeof(address_)) < 0) {
+    if (bind(fd_, reinterpret_cast<sockaddr*>(&address_), sizeof(address_))
+        < 0) {
         perror("Failed to bind socket");
         close(fd_);
         fd_ = -1;
@@ -63,6 +64,12 @@ server::~server()
 {
     if (fd_ > 0)
         close(fd_);
+}
+
+std::thread
+server::start_thread(const std::function<void(client_message&)>& on_message)
+{
+    return std::thread([this, on_message] { this->work_thread(on_message); });
 }
 
 void
