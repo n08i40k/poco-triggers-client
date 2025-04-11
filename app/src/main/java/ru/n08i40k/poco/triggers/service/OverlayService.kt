@@ -1,7 +1,10 @@
 package ru.n08i40k.poco.triggers.service
 
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.os.Bundle
 import android.os.CombinedVibration
@@ -23,53 +26,41 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import ru.n08i40k.poco.triggers.R
-import ru.n08i40k.poco.triggers.ui.overlay.AppOverlay
+import ru.n08i40k.poco.triggers.ui.model.OverlayViewModel
+import ru.n08i40k.poco.triggers.ui.overlay.Overlay
 
 private class MyLifecycleOwner : SavedStateRegistryOwner {
-    private var mLifecycleRegistry: LifecycleRegistry = LifecycleRegistry(this)
-    private var mSavedStateRegistryController: SavedStateRegistryController =
-        SavedStateRegistryController.create(this)
+    private var lifecycleRegistry = LifecycleRegistry(this)
+    private var savedStateRegistryController = SavedStateRegistryController.create(this)
 
-    /**
-     * @return True if the Lifecycle has been initialized.
-     */
-    val isInitialized: Boolean
-        get() = true
+    fun handleLifecycleEvent(event: Lifecycle.Event) =
+        lifecycleRegistry.handleLifecycleEvent(event)
 
-    fun setCurrentState(state: Lifecycle.State) {
-        mLifecycleRegistry.currentState = state
-    }
-
-    fun handleLifecycleEvent(event: Lifecycle.Event) {
-        mLifecycleRegistry.handleLifecycleEvent(event)
-    }
-
-    fun performRestore(savedState: Bundle?) {
-        mSavedStateRegistryController.performRestore(savedState)
-    }
-
-    fun performSave(outBundle: Bundle) {
-        mSavedStateRegistryController.performSave(outBundle)
-    }
+    fun performRestore(savedState: Bundle?) =
+        savedStateRegistryController.performRestore(savedState)
 
     override val savedStateRegistry: SavedStateRegistry
-        get() = mSavedStateRegistryController.savedStateRegistry
+        get() = savedStateRegistryController.savedStateRegistry
 
     override val lifecycle: Lifecycle
-        get() = mLifecycleRegistry
+        get() = lifecycleRegistry
 }
 
 class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var floatingView: ComposeView
 
-    override fun onBind(p0: Intent?): IBinder? {
-        return null
+    private val overlayViewModel by lazy { OverlayViewModel() }
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, indent: Intent?) {
+            if (indent?.action == "ru.n08i40k.poco.triggers.intent.TRIGGERS_CLOSED")
+                overlayViewModel.close()
+        }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_STICKY
 
     override fun onCreate() {
         super.onCreate()
@@ -87,18 +78,18 @@ class OverlayService : Service() {
                 .build()
         )
 
-        val vibratorManager = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
-        vibratorManager.vibrate(
-            CombinedVibration.createParallel(
-                VibrationEffect.createWaveform(
-                    longArrayOf(100, 100, 100, 100),
-                    intArrayOf(255, 200, 170, 150),
-                    -1
+        getSystemService(VibratorManager::class.java)
+            .vibrate(
+                CombinedVibration.createParallel(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(100, 100, 100, 100),
+                        intArrayOf(255, 200, 170, 150),
+                        -1
+                    )
                 )
             )
-        )
 
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        windowManager = getSystemService(WindowManager::class.java)
 
         floatingView = ComposeView(this).apply {
             val viewModelStore = ViewModelStore()
@@ -117,7 +108,7 @@ class OverlayService : Service() {
             })
 
             setContent {
-                AppOverlay()
+                Overlay(overlayViewModel)
             }
         }
 
@@ -138,11 +129,19 @@ class OverlayService : Service() {
         }
 
         windowManager.addView(floatingView, layoutParams)
+
+        registerReceiver(
+            receiver,
+            IntentFilter("ru.n08i40k.poco.triggers.intent.TRIGGERS_CLOSED"),
+            RECEIVER_EXPORTED
+        )
     }
 
     override fun onDestroy() {
         super.onDestroy()
 
         windowManager.removeView(floatingView)
+
+        unregisterReceiver(receiver)
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -15,10 +16,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,77 +33,48 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
-import ru.n08i40k.poco.triggers.Application
-import ru.n08i40k.poco.triggers.ClickPos
-import ru.n08i40k.poco.triggers.Settings
-import ru.n08i40k.poco.triggers.proto.settings
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.n08i40k.poco.triggers.service.OverlayService
 import ru.n08i40k.poco.triggers.touch.TriggerType
-
-private data class Trigger(
-    val enabled: Boolean, val pos: Offset
-) {
-    companion object {
-        fun fromDataStore(data: ru.n08i40k.poco.triggers.Trigger): Trigger {
-            return Trigger(
-                data.enabled,
-                if (data.pos.x == 0 && data.pos.y == 0)
-                    Offset(100f, 100f)
-                else
-                    Offset(data.pos.x.toFloat(), data.pos.y.toFloat())
-            )
-        }
-    }
-
-    fun toDataStore(builder: ru.n08i40k.poco.triggers.Trigger.Builder): ru.n08i40k.poco.triggers.Trigger {
-        return builder
-            .setEnabled(enabled)
-            .setPos(ClickPos.newBuilder().setX(pos.x.toInt()).setY(pos.y.toInt()))
-            .build()
-    }
-}
+import ru.n08i40k.poco.triggers.ui.model.OverlayViewModel
 
 @Composable
-fun AppOverlay() {
-    val coroutineScope = rememberCoroutineScope()
-
+fun Overlay(overlayViewModel: OverlayViewModel) {
     val context = LocalContext.current
 
-    val app = context.applicationContext as Application
-    var triggers = app.triggers
+    val overlayUiState by overlayViewModel.state.collectAsStateWithLifecycle()
 
-    var upperTrigger by remember { mutableStateOf(Trigger.fromDataStore(triggers.upper)) }
-    var lowerTrigger by remember { mutableStateOf(Trigger.fromDataStore(triggers.lower)) }
+    var upperTrigger by remember { mutableStateOf(overlayUiState.upperTrigger) }
+    var lowerTrigger by remember { mutableStateOf(overlayUiState.lowerTrigger) }
+
+    LaunchedEffect(overlayUiState) {
+        if (!overlayUiState.waitForClose)
+            return@LaunchedEffect
+
+        overlayViewModel.updateTriggers(upperTrigger, lowerTrigger)
+
+        val intent = Intent(context.applicationContext, OverlayService::class.java)
+        context.stopService(intent)
+    }
 
     Box(
         Modifier
             .fillMaxSize()
             .background(Color(0, 0, 0, 150))
     ) {
-        Box(Modifier.fillMaxSize(), Alignment.CenterEnd) {
-            IconButton({
-                app.triggers = triggers.toBuilder()
-                    .setUpper(upperTrigger.toDataStore(triggers.upper.toBuilder()))
-                    .setLower(lowerTrigger.toDataStore(triggers.lower.toBuilder())).build()
-
-                coroutineScope.launch {
-                    context.settings.updateData {
-                        Settings.getDefaultInstance().toBuilder().setTriggers(app.triggers).build()
-                    }
-
-                    app.sendSetting()
-
-                    val intent = Intent(context.applicationContext, OverlayService::class.java)
-                    context.stopService(intent)
-                }
-
-            }) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                // or the camera will overlap button
+                .padding(50.dp),
+            Alignment.CenterEnd
+        ) {
+            IconButton({ overlayViewModel.close() }) {
                 Icon(
                     Icons.Default.Close,
                     "Close",
-                    modifier = Modifier.size(50.dp),
-                    tint = MaterialTheme.colorScheme.inverseSurface
+                    Modifier.size(50.dp),
+                    MaterialTheme.colorScheme.inverseSurface
                 )
             }
         }
@@ -114,6 +86,7 @@ fun AppOverlay() {
             { upperTrigger = upperTrigger.copy(pos = upperTrigger.pos + it) }) {
             upperTrigger = upperTrigger.copy(enabled = !upperTrigger.enabled)
         }
+
         DraggableCircle(
             TriggerType.LOWER,
             lowerTrigger.enabled,
@@ -177,12 +150,12 @@ private fun convertDrag(rotation: Int, offset: Offset): Offset {
 }
 
 @Composable
-fun DraggableCircle(
+private fun DraggableCircle(
     type: TriggerType,
     enabled: Boolean,
     offset: Offset,
     onDrag: (Offset) -> Unit,
-    onSetEnabled: () -> Unit
+    onToggle: () -> Unit
 ) {
     val color = when (type) {
         TriggerType.UPPER -> Color.Red
@@ -233,6 +206,6 @@ fun DraggableCircle(
                 }
             }
             .pointerInput(1) {
-                detectTapGestures(onDoubleTap = { onSetEnabled() })
+                detectTapGestures(onDoubleTap = { onToggle() })
             })
 }

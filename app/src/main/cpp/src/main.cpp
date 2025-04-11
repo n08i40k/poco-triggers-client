@@ -39,9 +39,14 @@ struct trigger_data {
     bool pressed{};
 
     /**
-     * Time point of last press.
+     * Time point of last open.
      */
-    system_clock::time_point press_tp{};
+    system_clock::time_point open_tp{};
+
+    /**
+     * Time point of last close.
+     */
+    system_clock::time_point close_tp{};
 
     /**
      * Settings provided by client.
@@ -95,7 +100,8 @@ public:
         case LOWER_CLICK_KEY  :
         case LOWER_DISABLE_KEY:
         case LOWER_ENABLE_KEY : return this->at(UPPER_TRIGGER);
-        default              : throw std::invalid_argument("Invalid key");
+            default               :
+                throw std::invalid_argument("Invalid key");
         }
     }
 };
@@ -120,12 +126,12 @@ try_open_overlay(const std::uint32_t key, triggers_array& triggers)
     auto&       cur_trigger = triggers.by_key(key);
     const auto& inv_trigger = triggers.by_key_inv(key);
 
-    cur_trigger.press_tp = system_clock::now();
+    cur_trigger.open_tp = system_clock::now();
 
-    if (cur_trigger.press_tp - inv_trigger.press_tp > milliseconds(500))
+    if (cur_trigger.open_tp - inv_trigger.open_tp > milliseconds(500))
         return;
 
-    printf("Posting intent...\n");
+    printf("Posting open intent...\n");
     fflush(stdout);
 
     const auto pid = fork();
@@ -149,6 +155,42 @@ try_open_overlay(const std::uint32_t key, triggers_array& triggers)
 
     waitpid(pid, nullptr, 0);
 }
+
+    void
+    try_close_overlay(const std::uint32_t key, triggers_array &triggers) {
+        auto &cur_trigger = triggers.by_key(key);
+        const auto &inv_trigger = triggers.by_key_inv(key);
+
+        cur_trigger.close_tp = system_clock::now();
+
+        if (cur_trigger.close_tp - inv_trigger.close_tp > milliseconds(1000))
+            return;
+
+        printf("Posting close intent...\n");
+        fflush(stdout);
+
+        const auto pid = fork();
+
+        if (pid == -1) {
+            perror("fork");
+            return;
+        }
+
+        if (pid == 0) {
+            execlp(
+                    "sh",
+                    "sh",
+                    "-c",
+                    "am "
+                    " broadcast"
+                    " -a"
+                    " ru.n08i40k.poco.triggers.intent.TRIGGERS_CLOSED",
+                    nullptr);
+            _exit(127);
+        }
+
+        waitpid(pid, nullptr, 0);
+    }
 
 struct trigger_click_ev {
     trigger_index index;
@@ -279,8 +321,20 @@ main()
             return;
         }
 
-        if (!pressed && (key == UPPER_ENABLE_KEY || key == LOWER_ENABLE_KEY))
-            try_open_overlay(key, triggers);
+        if (!pressed) {
+            switch (key) {
+                case UPPER_ENABLE_KEY:
+                case LOWER_ENABLE_KEY :
+                    try_open_overlay(key, triggers);
+                    break;
+                case UPPER_DISABLE_KEY:
+                case LOWER_DISABLE_KEY:
+                    try_close_overlay(key, triggers);
+                    break;
+                default               :
+                    break;
+            }
+        }
     };
 
     auto           server_thread = server.start_thread(on_server_message);
