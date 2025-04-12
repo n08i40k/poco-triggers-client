@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import ru.n08i40k.poco.triggers.daemon.DaemonBridge
 import ru.n08i40k.poco.triggers.daemon.DaemonClient
 import ru.n08i40k.poco.triggers.model.AppViewModel
+import kotlin.system.exitProcess
 
 class Application : Application() {
     companion object {
@@ -48,7 +49,7 @@ class Application : Application() {
         shell.newJob().add("su").exec()
 
         if (!shell.isRoot)
-            return
+            exitProcess(-1)
 
         grantPermissions(shell)
 
@@ -63,17 +64,23 @@ class Application : Application() {
     }
 
     private fun grantPermissions(shell: Shell) {
-        Log.d(TAG, "Auto-grant permissions...")
+        Log.i(TAG, "Auto-grant permissions...")
 
-        shell
-            .newJob()
-            .add(
-                getUpdateServicesCommand(shell),
-                "pm grant ru.n08i40k.poco.triggers android.permission.SYSTEM_ALERT_WINDOW",
-                "pm grant ru.n08i40k.poco.triggers android.permission.POST_NOTIFICATIONS",
-                "pm grant ru.n08i40k.poco.triggers android.permission.FOREGROUND_SERVICE"
-            )
-            .exec()
+        val packageName = applicationInfo.packageName
+
+        val cmdList = listOf<String>(
+            "pm grant $packageName android.permission.SYSTEM_ALERT_WINDOW",
+            "pm grant $packageName android.permission.POST_NOTIFICATIONS",
+            "pm grant $packageName android.permission.FOREGROUND_SERVICE",
+            "appops set $packageName ACCESS_RESTRICTED_SETTINGS allow",
+            "appops set $packageName BIND_ACCESSIBILITY_SERVICE allow",
+            getUpdateServicesCommand(shell),
+        )
+
+        for (cmd in cmdList) {
+            Log.i(TAG, "Executing: $cmd")
+            shell.newJob().add(cmd).exec()
+        }
     }
 
     /**
@@ -98,7 +105,7 @@ class Application : Application() {
         // the command will return a set of strings separated by ':'.
         val newEnabledServices = enabledServices[0]
             .let { if (it == "null") mutableSetOf() else enabledServices[0].split(":").toSet() }
-            .plus("ru.n08i40k.poco.triggers/ru.n08i40k.poco.triggers.service.AccessibilityService")
+            .plus("ru.n08i40k.poco.triggers/.service.AccessibilityService")
             .joinToString(":")
 
         return "settings put secure enabled_accessibility_services $newEnabledServices"
