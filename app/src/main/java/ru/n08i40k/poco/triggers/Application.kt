@@ -5,13 +5,10 @@ import android.util.Log
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import ru.n08i40k.poco.triggers.daemon.DaemonBridge
-import ru.n08i40k.poco.triggers.proto.settings
 import ru.n08i40k.poco.triggers.daemon.DaemonClient
-import ru.n08i40k.poco.triggers.daemon.DaemonMessage
+import ru.n08i40k.poco.triggers.model.AppViewModel
 
 class Application : Application() {
     companion object {
@@ -25,16 +22,12 @@ class Application : Application() {
 
     private var daemonClient: DaemonClient? = null
 
-    lateinit var triggers: Triggers
+    val viewModel by lazy { AppViewModel(this) }
 
     override fun onCreate() {
         _INSTANCE = this
 
         super.onCreate()
-
-        coroutineScope.launch {
-            triggers = this@Application.settings.data.map { it.triggers }.first()
-        }
 
         init()
     }
@@ -57,15 +50,7 @@ class Application : Application() {
         if (!shell.isRoot)
             return
 
-        Log.d(TAG, "Auto-grant permissions...")
-        shell
-            .newJob()
-            .add(
-                "pm grant ru.n08i40k.poco.triggers android.permission.SYSTEM_ALERT_WINDOW",
-                "pm grant ru.n08i40k.poco.triggers android.permission.POST_NOTIFICATIONS",
-                "pm grant ru.n08i40k.poco.triggers android.permission.FOREGROUND_SERVICE"
-            )
-            .exec()
+        grantPermissions(shell)
 
         DaemonBridge.update()
         DaemonBridge.start()
@@ -74,24 +59,50 @@ class Application : Application() {
             Thread.sleep(3000)
 
             daemonClient = DaemonClient()
-            sendSetting()
         }
     }
 
-    fun sendSetting() {
-        daemonClient?.send(
-            DaemonMessage(
-                upper = DaemonMessage.Trigger(
-                    enabled = triggers.upper.enabled,
-                    x = triggers.upper.pos.x * 10,
-                    y = triggers.upper.pos.y * 10,
-                ),
-                lower = DaemonMessage.Trigger(
-                    enabled = triggers.lower.enabled,
-                    x = triggers.lower.pos.x * 10,
-                    y = triggers.lower.pos.y * 10,
-                )
+    private fun grantPermissions(shell: Shell) {
+        Log.d(TAG, "Auto-grant permissions...")
+
+        shell
+            .newJob()
+            .add(
+                getUpdateServicesCommand(shell),
+                "pm grant ru.n08i40k.poco.triggers android.permission.SYSTEM_ALERT_WINDOW",
+                "pm grant ru.n08i40k.poco.triggers android.permission.POST_NOTIFICATIONS",
+                "pm grant ru.n08i40k.poco.triggers android.permission.FOREGROUND_SERVICE"
             )
-        )
+            .exec()
     }
+
+    /**
+     * Getting the command to enable the application's accessibility service.
+     */
+    private fun getUpdateServicesCommand(shell: Shell): String {
+        // Get a list of currently enabled accessibility services in a system.
+        var enabledServices = mutableListOf<String>()
+        shell
+            .newJob()
+            .add("settings get secure enabled_accessibility_services")
+            .to(enabledServices)
+            .exec()
+
+        // Ensure that command runs as expected.
+        assert(enabledServices.size == 1)
+
+        // If no accessibility services enabled in a system,
+        // the command will return "null" string.
+        //
+        // But if any accessibility service is enabled,
+        // the command will return a set of strings separated by ':'.
+        val newEnabledServices = enabledServices[0]
+            .let { if (it == "null") mutableSetOf() else enabledServices[0].split(":").toSet() }
+            .plus("ru.n08i40k.poco.triggers/ru.n08i40k.poco.triggers.service.AccessibilityService")
+            .joinToString(":")
+
+        return "settings put secure enabled_accessibility_services $newEnabledServices"
+    }
+
+    fun sendSettings(triggers: Triggers) = daemonClient?.send(triggers)
 }

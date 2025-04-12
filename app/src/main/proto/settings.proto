@@ -13,13 +13,11 @@ message Trigger {
   ClickPos pos = 2;
 }
 
-// это можно сделать списком, но почему бы и нет
-// хотя я передумал, нельзя. не хочу путаться в индексах
 message Triggers {
   Trigger upper = 1;
   Trigger lower = 2;
 }
 
 message Settings {
-  Triggers triggers = 1;
+  map<string, Triggers> apps = 1;
 }

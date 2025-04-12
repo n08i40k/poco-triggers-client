@@ -13,7 +13,7 @@ data class OverlayTriggerData(
             return OverlayTriggerData(
                 data.enabled,
                 if (data.pos.x == 0 && data.pos.y == 0)
-                    Offset(100f, 100f)
+                    Offset(540f, 1200f)
                 else
                     Offset(data.pos.x.toFloat(), data.pos.y.toFloat())
             )

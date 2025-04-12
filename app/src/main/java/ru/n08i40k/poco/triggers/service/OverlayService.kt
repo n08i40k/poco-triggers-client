@@ -49,6 +49,8 @@ private class MyLifecycleOwner : SavedStateRegistryOwner {
 class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var floatingView: ComposeView
+    private lateinit var viewModelStore: ViewModelStore
+    private lateinit var lifecycleOwner: MyLifecycleOwner
 
     private val overlayViewModel by lazy { OverlayViewModel() }
     private val receiver = object : BroadcastReceiver() {
@@ -91,21 +93,21 @@ class OverlayService : Service() {
 
         windowManager = getSystemService(WindowManager::class.java)
 
+        viewModelStore = ViewModelStore()
+        lifecycleOwner = MyLifecycleOwner()
+
         floatingView = ComposeView(this).apply {
-            val viewModelStore = ViewModelStore()
-            val lifecycleOwner = MyLifecycleOwner()
-
-            lifecycleOwner.performRestore(null)
-            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
-            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
                 override val viewModelStore: ViewModelStore
                     get() = viewModelStore
             })
+
+            lifecycleOwner.performRestore(null)
+            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
+            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
             setContent {
                 Overlay(overlayViewModel)
@@ -140,6 +142,7 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         windowManager.removeView(floatingView)
 
         unregisterReceiver(receiver)

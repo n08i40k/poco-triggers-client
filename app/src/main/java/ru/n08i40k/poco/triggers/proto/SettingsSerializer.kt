@@ -1,7 +1,6 @@
 package ru.n08i40k.poco.triggers.proto
 
 import android.content.Context
-import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.Serializer
 import androidx.datastore.dataStore
@@ -16,8 +15,8 @@ object SettingsSerializer : Serializer<Settings> {
     override suspend fun readFrom(input: InputStream): Settings =
         try {
             Settings.parseFrom(input)
-        } catch (exception: InvalidProtocolBufferException) {
-            throw CorruptionException("Cannot read proto.", exception)
+        } catch (_: InvalidProtocolBufferException) {
+            defaultValue
         }
 
     override suspend fun writeTo(t: Settings, output: OutputStream) = t.writeTo(output)

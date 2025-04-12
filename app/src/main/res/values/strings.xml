@@ -1,13 +1,15 @@
 <resources>
     <string name="app_name" translatable="false">POCO Triggers</string>
-    <string name="accessibility_service_description">Listens for events associated with triggers to subsequently emulate clicks.</string>
-    <string name="accessibility_service_label">Triggers Listener</string>
+    <string name="accessibility_service_description">Necessary to change settings depending on the currently open application.</string>
+    <string name="accessibility_service_label" translatable="false">POCO Triggers</string>
     <string name="app_main_description">Hello!\n\nThis app is designed to emulate screen taps using triggers.\nIt may not work on all firmware or devices except POCO F4 GT.\nPlease take this into account.\n\nIf you think the app should work on your firmware or device, but the app does not work, create an issue on the project\'s GitHub page.\n\nQuick guide:\n- To display the menu for setting up the click positions, turn on 2 triggers at the same time, or one 2 times in a row.\n- To turn on/off a specific trigger, in the settings menu, click on it 2 times.\n- The upper trigger is the red circle.\n- The lower trigger is the blue circle.</string>
     <string name="root_required_title">Root rights required!</string>
     <string name="root_required_message">For the application to work, you must allow the application to use root rights.</string>
     <string name="exit">Exit</string>
     <string name="overlay_channel_name">Overlay status</string>
-    <string name="overlay_channel_description">Status noifications for overlay</string>
-    <string name="overlay_status_title">Overlay is running...</string>
+    <string name="overlay_channel_description">Status notifications for overlay</string>
+    <string name="overlay_status_title">Overlay is running…</string>
     <string name="overlay_status_desc">Ignore this ;)</string>
+    <string name="ok" translatable="false">OK</string>
+    <string name="overlay_warn_will_not_be_saved">You changing the settings for the excluded application, but they will not be saved.\nTo change the settings, go to another application.</string>
 </resources>

@@ -28,8 +28,7 @@ class MainActivity : ComponentActivity() {
         )
         channel.description = getString(R.string.overlay_channel_description)
 
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
-            .createNotificationChannel(channel)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

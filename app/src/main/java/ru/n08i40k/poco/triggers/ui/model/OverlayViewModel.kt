@@ -1,13 +1,10 @@
 package ru.n08i40k.poco.triggers.ui.model
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import ru.n08i40k.poco.triggers.Application
-import ru.n08i40k.poco.triggers.proto.settings
 import ru.n08i40k.poco.triggers.ui.overlay.OverlayTriggerData
 
 class OverlayViewModel : ViewModel() {
@@ -20,36 +17,41 @@ class OverlayViewModel : ViewModel() {
         }
     }
 
-    fun updateTriggers(
-        upperTrigger: OverlayTriggerData,
-        lowerTrigger: OverlayTriggerData,
-    ) {
+    fun sync() {
+        val appViewModel = Application.INSTANCE.viewModel
+        val appState = appViewModel.state.value
+
         _state.update {
             it.copy(
-                upperTrigger = upperTrigger,
-                lowerTrigger = lowerTrigger
+                packageName = appState.packageName,
+                upperTrigger = OverlayTriggerData.Companion.fromDataStore(appState.upperTrigger),
+                lowerTrigger = OverlayTriggerData.Companion.fromDataStore(appState.lowerTrigger)
+            )
+        }
+    }
+
+    fun updateTriggers(
+        upper: OverlayTriggerData,
+        lower: OverlayTriggerData,
+    ) {
+        if (_state.value.packageName?.isNotEmpty() != true)
+            return
+
+        _state.update {
+            it.copy(
+                upperTrigger = upper,
+                lowerTrigger = lower
             )
         }
 
-        val app = Application.INSTANCE
+        val appViewModel = Application.INSTANCE.viewModel
+        val appState = appViewModel.state.value
 
-        val appTriggers = app.triggers
-        val overlayTriggers = _state.value
+        appViewModel.updateTriggers(
+            _state.value.upperTrigger.toDataStore(appState.upperTrigger.toBuilder()),
+            _state.value.lowerTrigger.toDataStore(appState.lowerTrigger.toBuilder())
+        )
 
-        app.triggers = appTriggers.toBuilder()
-            .setUpper(overlayTriggers.upperTrigger.toDataStore(appTriggers.upper.toBuilder()))
-            .setLower(overlayTriggers.lowerTrigger.toDataStore(appTriggers.lower.toBuilder()))
-            .build()
-
-        viewModelScope.launch {
-            app.settings.updateData {
-                it
-                    .toBuilder()
-                    .setTriggers(app.triggers)
-                    .build()
-            }
-
-            app.sendSetting()
-        }
+        appViewModel.save()
     }
 }
