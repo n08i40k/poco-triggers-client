@@ -7,6 +7,7 @@
 #define BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD
 
 #include "constants.h"
+#include "device_utils.h"
 
 #include <array>
 #include <cstdio>
@@ -16,7 +17,7 @@
 #include <unistd.h>
 
 virt_device::virt_device()
-    : fd_(open("/dev/uinput", O_RDWR | O_NONBLOCK))
+        : fd_(open("/dev/uinput", O_WRONLY | O_NONBLOCK))
 {
     if (fd_ < 0) {
         perror("Failed to open uinput device");
@@ -75,7 +76,7 @@ virt_device::virt_device()
     }
 
     uinput_user_dev uidev = {};
-    snprintf(uidev.name, sizeof(uidev.name), "%s", VIRT_UDEV_NAME);
+    snprintf(uidev.name, sizeof(uidev.name), "%s", VIRTUAL_DEVICE_NAME);
     uidev.id.bustype = BUS_VIRTUAL;
     uidev.id.vendor  = 0x1234;
     uidev.id.product = 0x5678;
@@ -83,7 +84,7 @@ virt_device::virt_device()
 
     // ABS_MT_SLOT: [0, 9]
     uidev.absmin[ABS_MT_SLOT] = 0;
-    uidev.absmax[ABS_MT_SLOT] = VIRT_SLOT_MAX;
+    uidev.absmax[ABS_MT_SLOT] = VIRTUAL_SLOT_MAX;
 
     // ABS_MT_TOUCH_MAJOR: [0, 10800]
     uidev.absmin[ABS_MT_TOUCH_MAJOR] = 0;
@@ -133,10 +134,18 @@ virt_device::virt_device()
         close(fd_);
         fd_ = -1;
     }
+
+    read_fd_ = find_device(VIRTUAL_DEVICE_NAME);
+
+    if (read_fd_ < 0)
+        perror("Failed to open uinput device for read");
 }
 
 virt_device::~virt_device()
 {
+    if (read_fd_ > 0)
+        close(read_fd_);
+
     if (fd_ > 0) {
         if (ioctl(fd_, UI_DEV_DESTROY) < 0)
             perror("Failed to destroy udevice");

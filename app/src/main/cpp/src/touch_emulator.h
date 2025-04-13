@@ -54,4 +54,12 @@ struct touch_event {
 std::vector<input_event>
 emulate_touch(const touch_event& event);
 
+/**
+ * Function to get a new tracking id, for compatibility between generated events
+ * and real ones.
+ * @return Unique tracking id.
+ */
+std::int32_t
+get_tracking_id();
+
 #endif // TOUCH_EMULATOR_H

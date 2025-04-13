@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(poco-triggers-daemon LANGUAGES CXX)
+project(aosp-triggers-daemon LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

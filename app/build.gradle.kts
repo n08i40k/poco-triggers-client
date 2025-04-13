@@ -102,8 +102,10 @@ android {
         val cmakeTaskName = "buildCMake$buildTypeCMake[arm64-v8a]"
 
         val taskName =
-            "copyPocoTriggersDaemon${name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }}"
+            //noinspection WrongGradleMethod
+            "copyAOSPTriggersDaemon${name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }}"
 
+        //noinspection WrongGradleMethod
         val copyTask = tasks.register<Copy>(taskName) {
             dependsOn(cmakeTaskName)
 
@@ -112,7 +114,7 @@ android {
             mkdir(layout.buildDirectory.dir("generated/assets/bin"))
             into(layout.buildDirectory.dir("generated/assets/bin"))
 
-            rename { "poco-triggers-daemon" }
+            rename { "aosp-triggers-daemon" }
         }
 
         mergeAssetsProvider.get().dependsOn(copyTask)

@@ -20,6 +20,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "POCO Triggers"
+rootProject.name = "AOSP Triggers"
 include(":app")
  

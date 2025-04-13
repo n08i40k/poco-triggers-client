@@ -14,100 +14,108 @@ std::vector<input_event>
 emulate_touch(const touch_event& event)
 {
     std::vector<input_event> ev_queue{};
+    ev_queue.reserve(9);
 
-    input_event virt_ev{};
+    input_event ev{};
 
     // set slot
-    gettimeofday(&virt_ev.time, nullptr);
-    virt_ev.type  = EV_ABS;
-    virt_ev.code  = ABS_MT_SLOT;
-    virt_ev.value = FTS_SLOT_COUNT + event.index;
-    ev_queue.emplace_back(virt_ev);
+    gettimeofday(&ev.time, nullptr);
+    ev.type = EV_ABS;
+    ev.code = ABS_MT_SLOT;
+    ev.value = FTS_SLOT_COUNT + event.index;
+    ev_queue.emplace_back(ev);
 
     if (event.pressed) {
         // set touch id
-        gettimeofday(&virt_ev.time, nullptr);
-        virt_ev.type  = EV_ABS;
-        virt_ev.code  = ABS_MT_TRACKING_ID;
-        virt_ev.value = event.index;
-        ev_queue.emplace_back(virt_ev);
+        gettimeofday(&ev.time, nullptr);
+        ev.type = EV_ABS;
+        ev.code = ABS_MT_TRACKING_ID;
+        ev.value = get_tracking_id();
+        ev_queue.emplace_back(ev);
 
         // notify system about tap if no any taps before
         if (event.no_screen_taps) {
             // set touch
-            gettimeofday(&virt_ev.time, nullptr);
-            virt_ev.type  = EV_KEY;
-            virt_ev.code  = BTN_TOUCH;
-            virt_ev.value = 1;
-            ev_queue.emplace_back(virt_ev);
+            gettimeofday(&ev.time, nullptr);
+            ev.type = EV_KEY;
+            ev.code = BTN_TOUCH;
+            ev.value = 1;
+            ev_queue.emplace_back(ev);
 
             // set finger
-            gettimeofday(&virt_ev.time, nullptr);
-            virt_ev.type  = EV_KEY;
-            virt_ev.code  = BTN_TOOL_FINGER;
-            virt_ev.value = 1;
-            ev_queue.emplace_back(virt_ev);
+            gettimeofday(&ev.time, nullptr);
+            ev.type = EV_KEY;
+            ev.code = BTN_TOOL_FINGER;
+            ev.value = 1;
+            ev_queue.emplace_back(ev);
         }
 
         // set x
-        gettimeofday(&virt_ev.time, nullptr);
-        virt_ev.type  = EV_ABS;
-        virt_ev.code  = ABS_MT_POSITION_X;
-        virt_ev.value = event.x;
-        ev_queue.emplace_back(virt_ev);
+        gettimeofday(&ev.time, nullptr);
+        ev.type = EV_ABS;
+        ev.code = ABS_MT_POSITION_X;
+        ev.value = event.x;
+        ev_queue.emplace_back(ev);
 
         // set y
-        gettimeofday(&virt_ev.time, nullptr);
-        virt_ev.type  = EV_ABS;
-        virt_ev.code  = ABS_MT_POSITION_Y;
-        virt_ev.value = event.y;
-        ev_queue.emplace_back(virt_ev);
+        gettimeofday(&ev.time, nullptr);
+        ev.type = EV_ABS;
+        ev.code = ABS_MT_POSITION_Y;
+        ev.value = event.y;
+        ev_queue.emplace_back(ev);
     } else {
         // set touch id
-        gettimeofday(&virt_ev.time, nullptr);
-        virt_ev.type  = EV_ABS;
-        virt_ev.code  = ABS_MT_TRACKING_ID;
-        virt_ev.value = -1;
-        ev_queue.emplace_back(virt_ev);
+        gettimeofday(&ev.time, nullptr);
+        ev.type = EV_ABS;
+        ev.code = ABS_MT_TRACKING_ID;
+        ev.value = -1;
+        ev_queue.emplace_back(ev);
 
         // notify system about no more taps on screen
         if (event.no_screen_taps && !event.opposite_trigger_pressed) {
             // set touch
-            gettimeofday(&virt_ev.time, nullptr);
-            virt_ev.type  = EV_KEY;
-            virt_ev.code  = BTN_TOUCH;
-            virt_ev.value = 0;
-            ev_queue.emplace_back(virt_ev);
+            gettimeofday(&ev.time, nullptr);
+            ev.type = EV_KEY;
+            ev.code = BTN_TOUCH;
+            ev.value = 0;
+            ev_queue.emplace_back(ev);
 
             // set finger
-            gettimeofday(&virt_ev.time, nullptr);
-            virt_ev.type  = EV_KEY;
-            virt_ev.code  = BTN_TOOL_FINGER;
-            virt_ev.value = 0;
-            ev_queue.emplace_back(virt_ev);
+            gettimeofday(&ev.time, nullptr);
+            ev.type = EV_KEY;
+            ev.code = BTN_TOOL_FINGER;
+            ev.value = 0;
+            ev_queue.emplace_back(ev);
         }
     }
 
     // flush
-    gettimeofday(&virt_ev.time, nullptr);
-    virt_ev.type  = EV_SYN;
-    virt_ev.code  = SYN_REPORT;
-    virt_ev.value = 0;
-    ev_queue.emplace_back(virt_ev);
+    gettimeofday(&ev.time, nullptr);
+    ev.type = EV_SYN;
+    ev.code = SYN_REPORT;
+    ev.value = 0;
+    ev_queue.emplace_back(ev);
 
     // set slot back
-    gettimeofday(&virt_ev.time, nullptr);
-    virt_ev.type  = EV_ABS;
-    virt_ev.code  = ABS_MT_SLOT;
-    virt_ev.value = event.current_slot;
-    ev_queue.emplace_back(virt_ev);
+    gettimeofday(&ev.time, nullptr);
+    ev.type = EV_ABS;
+    ev.code = ABS_MT_SLOT;
+    ev.value = event.current_slot;
+    ev_queue.emplace_back(ev);
 
     // flush
-    gettimeofday(&virt_ev.time, nullptr);
-    virt_ev.type  = EV_SYN;
-    virt_ev.code  = SYN_REPORT;
-    virt_ev.value = 0;
-    ev_queue.emplace_back(virt_ev);
+    gettimeofday(&ev.time, nullptr);
+    ev.type = EV_SYN;
+    ev.code = SYN_REPORT;
+    ev.value = 0;
+    ev_queue.emplace_back(ev);
 
     return ev_queue;
+}
+
+std::int32_t
+get_tracking_id() {
+    // XD nice generator
+    static std::int32_t tracking_id{};
+    return tracking_id++;
 }

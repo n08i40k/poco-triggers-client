@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ru.n08i40k.poco.triggers.Triggers
 import java.net.Socket
+import java.net.SocketException
 
 internal class DaemonClient {
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -36,12 +37,25 @@ internal class DaemonClient {
         coroutineScope.launch {
             reconnect()
 
-            socket!!.outputStream.apply {
-                write(data)
-                flush()
+            try {
+                try {
+                    socket!!.outputStream.apply {
+                        write(data)
+                        flush()
+                    }
+                } catch (_: SocketException) {
+                    reconnect()
+
+                    socket!!.outputStream.apply {
+                        write(data)
+                        flush()
+                    }
+                }
+            } catch (_: Exception) {
             }
         }
     }
+
 
     fun close() {
         coroutineScope.launch {

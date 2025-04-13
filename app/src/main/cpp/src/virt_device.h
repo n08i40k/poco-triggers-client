@@ -8,6 +8,7 @@
 class virt_device
 {
     int fd_{};
+    int read_fd_{};
 
 public:
     virt_device();
@@ -18,6 +19,12 @@ public:
     fd() const
     {
         return fd_;
+    }
+
+    [[nodiscard]]
+    int
+    read_fd() const {
+        return read_fd_;
     }
 };
 

@@ -2,14 +2,14 @@ package ru.n08i40k.poco.triggers.daemon
 
 import com.topjohnwu.superuser.Shell
 import ru.n08i40k.poco.triggers.Application
-import java.io.File
 import ru.n08i40k.poco.triggers.BuildConfig
+import java.io.File
 
 object DaemonBridge {
     /**
      * Name of daemon's executable file
      */
-    const val EXECUTABLE_NAME = "poco-triggers-daemon"
+    const val EXECUTABLE_NAME = "aosp-triggers-daemon"
 
     /**
      * Name of daemon's unpacked executable file

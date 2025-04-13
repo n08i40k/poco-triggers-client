@@ -13,7 +13,7 @@ import kotlin.system.exitProcess
 
 class Application : Application() {
     companion object {
-        private const val TAG = "POCO-Triggers"
+        private const val TAG = "AOSP-Triggers"
 
         private lateinit var _INSTANCE: ru.n08i40k.poco.triggers.Application
         val INSTANCE get() = _INSTANCE
@@ -88,7 +88,7 @@ class Application : Application() {
      */
     private fun getUpdateServicesCommand(shell: Shell): String {
         // Get a list of currently enabled accessibility services in a system.
-        var enabledServices = mutableListOf<String>()
+        val enabledServices = mutableListOf<String>()
         shell
             .newJob()
             .add("settings get secure enabled_accessibility_services")

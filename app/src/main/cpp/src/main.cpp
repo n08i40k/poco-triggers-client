@@ -198,7 +198,6 @@ struct trigger_click_ev {
     bool pressed;
     bool opposite_pressed;
 
-    bool screen_lock;
     bool no_taps;
 
     std::int32_t slot;
@@ -206,13 +205,9 @@ struct trigger_click_ev {
 
 void
 on_trigger_click(
-    const std::int32_t        virt_fd,
-    std::vector<input_event>& locked_queue,
-    trigger_data&             trigger,
-    trigger_click_ev          event)
+        const std::int32_t virt_fd, trigger_data &trigger, trigger_click_ev event)
 {
-    auto& [index, pressed, opposite_pressed, screen_lock, no_taps, slot] =
-        event;
+    auto &[index, pressed, opposite_pressed, no_taps, slot] = event;
 
     if (!(trigger.ev_settings.enabled || trigger.pressed))
         return;
@@ -227,13 +222,27 @@ on_trigger_click(
                                 .opposite_trigger_pressed = opposite_pressed,
                                 .current_slot             = slot };
 
-    if (const auto gen_evs = emulate_touch(touch_ev); screen_lock)
-        locked_queue.append_range(gen_evs);
-    else {
-        for (const auto& gen_ev : gen_evs)
-            if (write(virt_fd, &gen_ev, sizeof(gen_ev)) < 0)
-                perror("Failed to write event to uinput device");
-    }
+    if (const auto evs = emulate_touch(touch_ev);
+            write(virt_fd, &*evs.cbegin(), sizeof(evs[0]) * evs.size()) < 0)
+        perror("Failed to write event to uinput device");
+}
+
+    std::vector<input_event>
+    read_until_syn(const std::int32_t fd) {
+        std::vector<input_event> events;
+        events.reserve(8);
+
+        input_event ev{};
+        memset(&ev, 0xFF, sizeof(ev));
+
+        while (ev.type != EV_SYN || ev.code != SYN_REPORT) {
+            if (read(fd, &ev, sizeof(ev)) != sizeof(ev))
+                continue;
+
+            events.emplace_back(ev);
+        }
+
+        return events;
 }
 } // namespace
 
@@ -270,15 +279,28 @@ main()
 
     std::mutex mtx{};
 
-    bool no_taps{ true };
+    triggers_array triggers{
+#ifndef NDEBUG
+            trigger_data{
+                    .pressed  = false,
+                    .open_tp  = system_clock::now(),
+                    .close_tp = system_clock::now(),
+                    .ev_settings =
+                    trigger_settings{.enabled = true, .x = 5400, .y = 17000}},
+            trigger_data{
+                    .pressed  = false,
+                    .open_tp  = system_clock::now(),
+                    .close_tp = system_clock::now(),
+                    .ev_settings =
+                    trigger_settings{.enabled = true, .x = 5400, .y = 7000}},
+#endif
+    };
 
-    triggers_array triggers{};
+    __s32 slot{};
+    bool no_taps{true};
 
-    input_event ev{};
-    __s32       slot{};
-
-    bool                     screen_lock{};
-    std::vector<input_event> locked_queue{};
+    // bool                     screen_lock{};
+    // std::vector<input_event> locked_queue{};
 
     const auto on_server_message = [&](const client_message& message) {
         printf("New triggers settings!\n");
@@ -291,7 +313,9 @@ main()
     };
 
     const auto on_virt_cycle = [&] {
-        if (read(virt.fd(), &ev, sizeof(ev)) != sizeof(ev))
+        input_event ev{};
+
+        if (read(virt.read_fd(), &ev, sizeof(ev)) != sizeof(ev))
             return;
 
         const std::lock_guard lock{ mtx };
@@ -310,13 +334,11 @@ main()
                 .index = key == UPPER_CLICK_KEY ? UPPER_TRIGGER : LOWER_TRIGGER,
                 .pressed          = pressed,
                 .opposite_pressed = triggers.by_key_inv(key).pressed,
-                .screen_lock      = screen_lock,
                 .no_taps          = no_taps,
                 .slot             = slot
             };
 
-            on_trigger_click(
-                virt.fd(), locked_queue, triggers.by_key(key), click_ev);
+            on_trigger_click(virt.fd(), triggers.by_key(key), click_ev);
 
             return;
         }
@@ -341,36 +363,60 @@ main()
     endless_thread virt_thread(on_virt_cycle);
     auto           xm_thread = xm.start_work_thread(on_xm_ev);
 
+    std::int32_t screen_slot{};
+
     // screen events
     // ReSharper disable once CppDFAEndlessLoop
     while (true) {
-        if (read(fts.fd(), &ev, sizeof(ev)) != sizeof(ev))
-            continue;
+        auto evs = read_until_syn(fts.fd());
 
         const std::lock_guard lock{ mtx };
 
-        if (ev.type == EV_KEY
-            && (ev.code == BTN_TOUCH || ev.code == BTN_TOOL_FINGER)) {
-            no_taps = ev.value == 0;
+        if (screen_slot != slot
+            && (evs[0].type != EV_ABS || evs[0].code != ABS_MT_SLOT)) {
+            input_event slot_ev{};
+            slot_ev.time = timeval{.tv_sec  = evs[0].time.tv_sec,
+                    .tv_usec = evs[0].time.tv_usec - 10};
+            slot_ev.type = EV_ABS;
+            slot_ev.code = ABS_MT_SLOT;
+            slot_ev.value = screen_slot;
 
-            // если прекращено нажатие на экран, а триггеры зажаты
-            if (triggers.any_pressed())
-                continue;
+            evs.insert(evs.begin(), slot_ev);
         }
 
-        if (write(virt.fd(), &ev, sizeof(ev)) < 0)
+        for (auto ev_it = evs.begin(); ev_it != evs.end();) {
+            switch (auto &[_, type, code, value] = *ev_it; type) {
+                case EV_ABS: {
+                    if (code == ABS_MT_TRACKING_ID && value != 0xFFFFFFFF)
+                        value = get_tracking_id();
+
+                    if (code == ABS_MT_SLOT)
+                        screen_slot = value;
+
+                    break;
+                }
+                case EV_KEY: {
+                    if (code == BTN_TOUCH || code == BTN_TOOL_FINGER) {
+                        no_taps = value == 0;
+
+                        // если прекращено нажатие на экран, а триггеры зажаты
+                        if (triggers.any_pressed()) {
+                            ev_it = evs.erase(ev_it);
+                            continue;
+                        }
+                    }
+
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            ++ev_it;
+        }
+
+        if (write(virt.fd(), &*evs.cbegin(), sizeof(evs[0]) * evs.size()) < 0)
             perror("Failed to write event to uinput device");
-
-        if (ev.type != EV_SYN && ev.code != SYN_REPORT)
-            screen_lock = true;
-        else if (screen_lock) {
-            for (const auto& emu_ev : locked_queue)
-                if (write(virt.fd(), &emu_ev, sizeof(emu_ev)) < 0)
-                    perror("Failed to write event to uinput device");
-            locked_queue.clear();
-
-            screen_lock = false;
-        }
     }
 
     // ReSharper disable CppDFAUnreachableCode
