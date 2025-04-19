@@ -4,8 +4,6 @@
 
 #include "fts_lock.h"
 
-#define BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD
-
 #include "device_utils.h"
 
 #include <cstdio>

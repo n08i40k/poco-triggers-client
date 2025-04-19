@@ -4,8 +4,6 @@
 
 #include "virt_device.h"
 
-#define BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD
-
 #include "constants.h"
 #include "device_utils.h"
 

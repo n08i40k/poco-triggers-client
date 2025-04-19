@@ -1,7 +1,3 @@
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "OCUnusedMacroInspection"
-#define BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD
-
 #include "constants.h"
 #include "fts_lock.h"
 #include "server.h"
@@ -11,10 +7,8 @@
 
 #include <algorithm>
 #include <android/log.h>
-#include <arpa/inet.h>
 #include <array>
 #include <cstdio>
-#include <functional>
 #include <linux/input.h>
 #include <mutex>
 #include <sys/wait.h>
@@ -22,7 +16,8 @@
 #include <unistd.h>
 
 #define LOG_ANDROID(...)                                                       \
-    ((void)__android_log_print(ANDROID_LOG_INFO, "TriggersDaemon", __VA_ARGS__))
+    ((void)__android_log_print(                                                \
+        ANDROID_LOG_INFO, "AOSP-TD", __VA_ARGS__)) // aosp tower defense :)
 
 enum trigger_index : std::uint8_t {
     UPPER_TRIGGER = 0,
@@ -100,8 +95,7 @@ public:
         case LOWER_CLICK_KEY  :
         case LOWER_DISABLE_KEY:
         case LOWER_ENABLE_KEY : return this->at(UPPER_TRIGGER);
-            default               :
-                throw std::invalid_argument("Invalid key");
+        default               : throw std::invalid_argument("Invalid key");
         }
     }
 };
@@ -156,41 +150,42 @@ try_open_overlay(const std::uint32_t key, triggers_array& triggers)
     waitpid(pid, nullptr, 0);
 }
 
-    void
-    try_close_overlay(const std::uint32_t key, triggers_array &triggers) {
-        auto &cur_trigger = triggers.by_key(key);
-        const auto &inv_trigger = triggers.by_key_inv(key);
+void
+try_close_overlay(const std::uint32_t key, triggers_array& triggers)
+{
+    auto&       cur_trigger = triggers.by_key(key);
+    const auto& inv_trigger = triggers.by_key_inv(key);
 
-        cur_trigger.close_tp = system_clock::now();
+    cur_trigger.close_tp = system_clock::now();
 
-        if (cur_trigger.close_tp - inv_trigger.close_tp > milliseconds(1000))
-            return;
+    if (cur_trigger.close_tp - inv_trigger.close_tp > milliseconds(1000))
+        return;
 
-        printf("Posting close intent...\n");
-        fflush(stdout);
+    printf("Posting close intent...\n");
+    fflush(stdout);
 
-        const auto pid = fork();
+    const auto pid = fork();
 
-        if (pid == -1) {
-            perror("fork");
-            return;
-        }
-
-        if (pid == 0) {
-            execlp(
-                    "sh",
-                    "sh",
-                    "-c",
-                    "am "
-                    " broadcast"
-                    " -a"
-                    " ru.n08i40k.poco.triggers.intent.TRIGGERS_CLOSED",
-                    nullptr);
-            _exit(127);
-        }
-
-        waitpid(pid, nullptr, 0);
+    if (pid == -1) {
+        perror("fork");
+        return;
     }
+
+    if (pid == 0) {
+        execlp(
+            "sh",
+            "sh",
+            "-c",
+            "am "
+            " broadcast"
+            " -a"
+            " ru.n08i40k.poco.triggers.intent.TRIGGERS_CLOSED",
+            nullptr);
+        _exit(127);
+    }
+
+    waitpid(pid, nullptr, 0);
+}
 
 struct trigger_click_ev {
     trigger_index index;
@@ -205,49 +200,68 @@ struct trigger_click_ev {
 
 void
 on_trigger_click(
-        const std::int32_t virt_fd, trigger_data &trigger, trigger_click_ev event)
+    const std::int32_t     virt_fd,
+    trigger_data&          trigger,
+    const trigger_click_ev event)
 {
-    auto &[index, pressed, opposite_pressed, no_taps, slot] = event;
-
     if (!(trigger.ev_settings.enabled || trigger.pressed))
         return;
 
-    trigger.pressed = pressed;
+    // овощ на clion eap.
+    // ReSharper disable once CppDFANotInitializedField
+    trigger.pressed = event.pressed;
 
-    const touch_event touch_ev{ .index          = index,
-                                .pressed        = pressed,
+    const touch_event touch_ev{ .index          = event.index,
+                                .pressed        = event.pressed,
                                 .x              = trigger.ev_settings.x,
                                 .y              = trigger.ev_settings.y,
-                                .no_screen_taps = no_taps,
-                                .opposite_trigger_pressed = opposite_pressed,
-                                .current_slot             = slot };
+                                .no_screen_taps = event.no_taps,
+                                .opposite_trigger_pressed =
+                                    event.opposite_pressed,
+                                .current_slot = event.slot };
 
     if (const auto evs = emulate_touch(touch_ev);
-            write(virt_fd, &*evs.cbegin(), sizeof(evs[0]) * evs.size()) < 0)
-        perror("Failed to write event to uinput device");
+        write(virt_fd, &*evs.cbegin(), sizeof(evs[0]) * evs.size()) < 0)
+        perror("Failed to write event to virtual device");
 }
 
-    std::vector<input_event>
-    read_until_syn(const std::int32_t fd) {
-        std::vector<input_event> events;
-        events.reserve(8);
+std::vector<input_event>
+read_until_syn(const std::int32_t fd)
+{
+    std::vector<input_event> events;
+    events.reserve(8);
 
-        input_event ev{};
-        memset(&ev, 0xFF, sizeof(ev));
+    input_event ev{};
+    memset(&ev, 0xFF, sizeof(ev));
 
-        while (ev.type != EV_SYN || ev.code != SYN_REPORT) {
-            if (read(fd, &ev, sizeof(ev)) != sizeof(ev))
-                continue;
+    while (ev.type != EV_SYN || ev.code != SYN_REPORT) {
+        if (read(fd, &ev, sizeof(ev)) != sizeof(ev))
+            continue;
 
-            events.emplace_back(ev);
-        }
+        events.emplace_back(ev);
+    }
 
-        return events;
+    return events;
+}
+
+void
+hello()
+{
+    const auto  epoch = time(nullptr);
+    const auto* time  = localtime(&epoch);
+
+    std::array<char, 60> time_buf{};
+    strftime(time_buf.data(), time_buf.size(), "%d-%m-%Y %H:%M:%S", time);
+
+    LOG_ANDROID("Startup...");
+
+    printf("Startup at %s...\n", time_buf.data());
+    fflush(stdout);
 }
 } // namespace
 
-int
-main()
+int    // исключение тут невозможно, это из-за switch-case.
+main() // NOLINT(*-exception-escape)
 {
     LOG_ANDROID("Hello!");
     printf("Hello, World!\n");
@@ -281,26 +295,23 @@ main()
 
     triggers_array triggers{
 #ifndef NDEBUG
-            trigger_data{
-                    .pressed  = false,
-                    .open_tp  = system_clock::now(),
-                    .close_tp = system_clock::now(),
-                    .ev_settings =
-                    trigger_settings{.enabled = true, .x = 5400, .y = 17000}},
-            trigger_data{
-                    .pressed  = false,
-                    .open_tp  = system_clock::now(),
-                    .close_tp = system_clock::now(),
-                    .ev_settings =
-                    trigger_settings{.enabled = true, .x = 5400, .y = 7000}},
+        trigger_data{
+                     .pressed  = false,
+                     .open_tp  = system_clock::now(),
+                     .close_tp = system_clock::now(),
+                     .ev_settings =
+                     trigger_settings{ .enabled = true, .x = 5400, .y = 17000 } },
+        trigger_data{
+                     .pressed  = false,
+                     .open_tp  = system_clock::now(),
+                     .close_tp = system_clock::now(),
+                     .ev_settings =
+                     trigger_settings{ .enabled = true, .x = 5400, .y = 7000 } },
 #endif
     };
 
     __s32 slot{};
-    bool no_taps{true};
-
-    // bool                     screen_lock{};
-    // std::vector<input_event> locked_queue{};
+    bool  no_taps{ true };
 
     const auto on_server_message = [&](const client_message& message) {
         printf("New triggers settings!\n");
@@ -345,16 +356,11 @@ main()
 
         if (!pressed) {
             switch (key) {
-                case UPPER_ENABLE_KEY:
-                case LOWER_ENABLE_KEY :
-                    try_open_overlay(key, triggers);
-                    break;
-                case UPPER_DISABLE_KEY:
-                case LOWER_DISABLE_KEY:
-                    try_close_overlay(key, triggers);
-                    break;
-                default               :
-                    break;
+            case UPPER_ENABLE_KEY:
+            case LOWER_ENABLE_KEY : try_open_overlay(key, triggers); break;
+            case UPPER_DISABLE_KEY:
+            case LOWER_DISABLE_KEY: try_close_overlay(key, triggers); break;
+            default               : break;
             }
         }
     };
@@ -375,48 +381,52 @@ main()
         if (screen_slot != slot
             && (evs[0].type != EV_ABS || evs[0].code != ABS_MT_SLOT)) {
             input_event slot_ev{};
-            slot_ev.time = timeval{.tv_sec  = evs[0].time.tv_sec,
-                    .tv_usec = evs[0].time.tv_usec - 10};
-            slot_ev.type = EV_ABS;
-            slot_ev.code = ABS_MT_SLOT;
+            slot_ev.time  = timeval{ .tv_sec  = evs[0].time.tv_sec,
+                                     .tv_usec = evs[0].time.tv_usec - 10 };
+            slot_ev.type  = EV_ABS;
+            slot_ev.code  = ABS_MT_SLOT;
             slot_ev.value = screen_slot;
 
             evs.insert(evs.begin(), slot_ev);
         }
 
         for (auto ev_it = evs.begin(); ev_it != evs.end();) {
-            switch (auto &[_, type, code, value] = *ev_it; type) {
-                case EV_ABS: {
-                    if (code == ABS_MT_TRACKING_ID && value != 0xFFFFFFFF)
-                        value = get_tracking_id();
+            switch (auto& [_, type, code, value] = *ev_it; type) {
+            case EV_ABS: {
+                if (code == ABS_MT_TRACKING_ID && value != 0xFFFFFFFF)
+                    value = get_tracking_id();
 
-                    if (code == ABS_MT_SLOT)
-                        screen_slot = value;
+                if (code == ABS_MT_SLOT)
+                    screen_slot = value;
 
                     break;
                 }
                 case EV_KEY: {
                     if (code == BTN_TOUCH || code == BTN_TOOL_FINGER) {
                         no_taps = value == 0;
+                break;
+            }
+            case EV_KEY: {
+                if (code == BTN_TOUCH || code == BTN_TOOL_FINGER) {
+                    no_taps = value == 0;
 
-                        // если прекращено нажатие на экран, а триггеры зажаты
-                        if (triggers.any_pressed()) {
-                            ev_it = evs.erase(ev_it);
-                            continue;
-                        }
+                    // если прекращено нажатие на экран, а триггеры зажаты
+                    if (triggers.any_pressed()) {
+                        ev_it = evs.erase(ev_it);
+                        continue;
                     }
-
-                    break;
                 }
-                default:
-                    break;
+
+                break;
+            }
+            default: break;
             }
 
             ++ev_it;
         }
 
         if (write(virt.fd(), &*evs.cbegin(), sizeof(evs[0]) * evs.size()) < 0)
-            perror("Failed to write event to uinput device");
+            perror("Failed to write event to virtual device");
     }
 
     // ReSharper disable CppDFAUnreachableCode
@@ -424,8 +434,6 @@ main()
     virt_thread.join();
     xm_thread.join();
 
-    return 0;
+    return EXIT_SUCCESS;
     // ReSharper restore CppDFAUnreachableCode
 }
-
-#pragma clang diagnostic pop
