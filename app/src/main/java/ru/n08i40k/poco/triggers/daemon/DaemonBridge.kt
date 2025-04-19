@@ -102,7 +102,7 @@ object DaemonBridge {
             .newJob()
             .add(
                 "rm $LOG_PATH",
-                "nohup setsid $EXECUTABLE_PATH &> $LOG_PATH"
+                "$EXECUTABLE_PATH &> $LOG_PATH"
             )
             .submit()
     }

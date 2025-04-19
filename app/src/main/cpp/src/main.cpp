@@ -1,4 +1,5 @@
 #include "constants.h"
+#include "daemonize.h"
 #include "fts_lock.h"
 #include "server.h"
 #include "touch_emulator.h"
@@ -272,8 +273,9 @@ hello()
 int    // исключение тут невозможно, это из-за switch-case.
 main() // NOLINT(*-exception-escape)
 {
-    LOG_ANDROID("Hello!");
-    printf("Hello, World!\n");
+    hello();
+    daemonize();
+
     printf("-------------------------------\n");
     printf("%-10s | %-8s | %s\n", "name", "fd", "mode");
     fflush(stdout);
