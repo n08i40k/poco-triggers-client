@@ -135,6 +135,8 @@ virt_device::virt_device()
         fd_ = -1;
     }
 
+    usleep(100 * 1000); // я потратил весь день на это((
+
     read_fd_ = find_device(VIRTUAL_DEVICE_NAME);
 
     if (read_fd_ < 0)
