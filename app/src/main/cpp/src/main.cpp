@@ -235,7 +235,16 @@ read_until_syn(const std::int32_t fd)
     memset(&ev, 0xFF, sizeof(ev));
 
     while (ev.type != EV_SYN || ev.code != SYN_REPORT) {
-        if (read(fd, &ev, sizeof(ev)) != sizeof(ev))
+        const auto n = read(fd, &ev, sizeof(ev));
+
+        if (n < 0) {
+            fprintf(stderr, "[%08X] ", fd);
+            perror("Failed to read event");
+
+            exit(EXIT_FAILURE);
+        }
+
+        if (n != sizeof(ev))
             continue;
 
         events.emplace_back(ev);
@@ -265,29 +274,54 @@ main() // NOLINT(*-exception-escape)
 {
     LOG_ANDROID("Hello!");
     printf("Hello, World!\n");
+    printf("-------------------------------\n");
+    printf("%-10s | %-8s | %s\n", "name", "fd", "mode");
     fflush(stdout);
 
-    // prepare
+    const auto write_fd =
+        [](const char* device, const std::int32_t fd, const char* mode) {
+            printf("%-10s | %08X | %s\n", device, fd, mode);
+            fflush(stdout);
+        };
 
+    /// fts
     const fts_lock fts{};
 
     if (fts.fd() < 0)
         return EXIT_FAILURE;
 
+    write_fd("fts", fts.fd(), "ro + grabbed");
+
+    /// xm_gamekey
     const xm_watcher xm{};
 
     if (xm.fd() < 0)
         return EXIT_FAILURE;
 
+    write_fd("xm_gamekey", xm.fd(), "ro");
+
+    /// virtual device
     const virt_device virt{};
 
     if (virt.fd() < 0)
         return EXIT_FAILURE;
 
+    if (virt.read_fd() < 0)
+        return EXIT_FAILURE;
+
+    write_fd("virtual", virt.fd(), "wo + udevice");
+    write_fd("virtual", virt.read_fd(), "ro");
+
+    /// server
     server server{};
 
     if (server.fd() < 0)
         return EXIT_FAILURE;
+
+    write_fd("server", server.fd(), "ro + socket");
+
+    printf("-------------------------------\n");
+    fflush(stdout);
 
     // used variables
 
@@ -326,7 +360,14 @@ main() // NOLINT(*-exception-escape)
     const auto on_virt_cycle = [&] {
         input_event ev{};
 
-        if (read(virt.read_fd(), &ev, sizeof(ev)) != sizeof(ev))
+        const auto n = read(virt.read_fd(), &ev, sizeof(ev));
+
+        if (n < 0) {
+            perror("Failed to read event from virtual device");
+            exit(EXIT_FAILURE);
+        }
+
+        if (n != sizeof(ev))
             return;
 
         const std::lock_guard lock{ mtx };
@@ -399,11 +440,6 @@ main() // NOLINT(*-exception-escape)
                 if (code == ABS_MT_SLOT)
                     screen_slot = value;
 
-                    break;
-                }
-                case EV_KEY: {
-                    if (code == BTN_TOUCH || code == BTN_TOOL_FINGER) {
-                        no_taps = value == 0;
                 break;
             }
             case EV_KEY: {
