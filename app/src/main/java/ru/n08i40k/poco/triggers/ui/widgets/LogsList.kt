@@ -31,14 +31,14 @@ fun LogsList(modifier: Modifier = Modifier) {
     var logs = remember { mutableStateListOf<String>() }
 
     val isLoaded by DaemonBridge.initialized.collectAsStateWithLifecycle(false)
-    val logsReader = if (isLoaded) hiltViewModel<LogsViewModel>() else null
+    val logsReader = hiltViewModel<LogsViewModel>()
 
-    LaunchedEffect(logsReader) {
-        logsReader?.let {
-            it
-                .line
-                .collect { logs.add(it) }
-        }
+    LaunchedEffect(isLoaded) {
+        if (!isLoaded)
+            return@LaunchedEffect
+
+        logsReader.attach()
+        logsReader.line.collect { logs.add(it) }
     }
 
     Card(
