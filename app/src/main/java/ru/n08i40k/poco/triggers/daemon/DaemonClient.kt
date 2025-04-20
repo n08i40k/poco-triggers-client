@@ -7,10 +7,11 @@ import ru.n08i40k.poco.triggers.Triggers
 import java.net.Socket
 import java.net.SocketException
 
-internal class DaemonClient {
+class DaemonClient {
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
     private var socket: Socket? = null
+    val isConnected get() = socket?.isConnected == true
 
     private fun reconnect() {
         if (socket?.isConnected == true)

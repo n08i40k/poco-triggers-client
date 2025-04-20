@@ -1,30 +1,33 @@
 package ru.n08i40k.poco.triggers.daemon
 
 import com.topjohnwu.superuser.Shell
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.runBlocking
 import ru.n08i40k.poco.triggers.Application
 import ru.n08i40k.poco.triggers.BuildConfig
 import java.io.File
 
 object DaemonBridge {
     /**
-     * Name of daemon's executable file
+     * Name of daemon's executable file.
      */
     const val EXECUTABLE_NAME = "aosp-triggers-daemon"
 
     /**
-     * Name of daemon's unpacked executable file
+     * Name of daemon's unpacked executable file.
      */
     const val EXECUTABLE_NAME_VERSIONED = "$EXECUTABLE_NAME+${BuildConfig.BUILD_TIME}"
 
     /**
-     * Full path to daemon's executable file
+     * Full path to daemon's executable file.
      */
     const val EXECUTABLE_PATH = "/data/local/tmp/$EXECUTABLE_NAME_VERSIONED"
 
     /**
-     * Full path to daemon's log file
+     * Full path to daemon's log file.
      */
-    const val LOG_PATH = "/data/local/tmp/$EXECUTABLE_NAME.log"
+    val LOG_PATH = Application.INSTANCE.filesDir.path + "/daemon.log"
 
     /**
      * Get daemon's executable file
@@ -32,12 +35,12 @@ object DaemonBridge {
     val executableFile get() = File(EXECUTABLE_PATH)
 
     /**
-     * Get daemon's log file
+     * Get daemon's log file.
      */
     val logFile get() = File(LOG_PATH)
 
     /**
-     * Get pid of daemon if it's running
+     * Get pid of daemon if it's running.
      */
     val pid: Int?
         get() {
@@ -51,12 +54,19 @@ object DaemonBridge {
         }
 
     /**
-     * Check if the daemon is started
+     * Check if the daemon is started.
      */
     val started get() = pid != null
 
+    private val _initialized = MutableStateFlow<Boolean>(false)
+
     /**
-     * Replace old daemon executable with its new version
+     * State-flow indicating whether an attempt was made to stop/start the daemon.
+     */
+    val initialized = _initialized.asStateFlow()
+
+    /**
+     * Replace old daemon executable with its new version.
      */
     fun update(force: Boolean = false) {
         if (!force && executableFile.exists())
@@ -80,16 +90,18 @@ object DaemonBridge {
     }
 
     /**
-     * Stop currently running daemon
+     * Stop currently running daemon.
      */
     fun stop() {
         Shell.cmd("pkill -f $EXECUTABLE_NAME").exec()
+
+        runBlocking { _initialized.emit(false) }
     }
 
     /**
      * Start daemon if not started.
      *
-     * If force is true, the daemon will be restarted
+     * If force is true, the daemon will be restarted.
      */
     fun start(force: Boolean = false) {
         if (force)
@@ -101,9 +113,11 @@ object DaemonBridge {
             .getShell()
             .newJob()
             .add(
-                "rm $LOG_PATH",
+                "rm $LOG_PATH && touch $LOG_PATH",
                 "$EXECUTABLE_PATH &> $LOG_PATH"
             )
             .submit()
+
+        runBlocking { _initialized.emit(true) }
     }
 }

@@ -20,4 +20,5 @@ message Triggers {
 
 message Settings {
   map<string, Triggers> apps = 1;
+  bool completed_intro = 2;
 }

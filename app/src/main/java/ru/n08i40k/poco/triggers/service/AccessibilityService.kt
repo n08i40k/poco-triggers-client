@@ -4,23 +4,27 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import kotlinx.coroutines.flow.MutableStateFlow
 import ru.n08i40k.poco.triggers.Application
 import ru.n08i40k.poco.triggers.MainActivity
 
 class AccessibilityService : AccessibilityService() {
-    private companion object {
-        const val TAG = "AccessibilityService"
+    companion object {
+        private const val TAG = "AccessibilityService"
 
-        val FORBIDDEN_APPS = listOf<String>(
+        private val FORBIDDEN_APPS = listOf<String>(
             "excluded.package.names.here"
         )
-        val FORBIDDEN_ACTIVITIES = listOf<String>(
+
+        private val FORBIDDEN_ACTIVITIES = listOf<String>(
             MainActivity::class.java.name
         )
 
-        val SKIP_APPS = listOf<String>(
+        private val SKIP_APPS = listOf<String>(
             "com.android.systemui"
         )
+
+        val connected = MutableStateFlow(false)
     }
 
     override fun onServiceConnected() {
@@ -34,10 +38,14 @@ class AccessibilityService : AccessibilityService() {
         }
 
         this.serviceInfo = info
+
+        connected.tryEmit(true)
     }
 
     override fun onInterrupt() {
         Log.d(TAG, "Accessibility service interrupted")
+
+        connected.tryEmit(false)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

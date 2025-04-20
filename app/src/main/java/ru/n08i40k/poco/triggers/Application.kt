@@ -3,14 +3,15 @@ package ru.n08i40k.poco.triggers
 import android.app.Application
 import android.util.Log
 import com.topjohnwu.superuser.Shell
+import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ru.n08i40k.poco.triggers.daemon.DaemonBridge
 import ru.n08i40k.poco.triggers.daemon.DaemonClient
 import ru.n08i40k.poco.triggers.model.AppViewModel
-import kotlin.system.exitProcess
 
+@HiltAndroidApp
 class Application : Application() {
     companion object {
         private const val TAG = "AOSP-Triggers"
@@ -21,7 +22,19 @@ class Application : Application() {
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
-    private var daemonClient: DaemonClient? = null
+    private var _initialized = false
+    private var _daemonClient: DaemonClient? = null
+
+    /**
+     * Whether the application was initialized
+     * or whether root permissions were present at the time of the initialization attempt.
+     */
+    val initialized get() = _initialized
+
+    /**
+     * A client to communicate with the daemon via socket.
+     */
+    val daemonClient get() = _daemonClient
 
     val viewModel by lazy { AppViewModel(this) }
 
@@ -30,26 +43,26 @@ class Application : Application() {
 
         super.onCreate()
 
-        init()
+//        init()
     }
 
     override fun onTerminate() {
-        daemonClient?.close()
+        _daemonClient?.close()
 
         super.onTerminate()
     }
 
     fun init() {
-        if (daemonClient != null) {
-            daemonClient!!.close()
-            daemonClient = null
+        if (_daemonClient != null) {
+            _daemonClient!!.close()
+            _daemonClient = null
         }
 
-        val shell = Shell.getShell()
+        val shell = Shell.Builder.create().build()
         shell.newJob().add("su").exec()
 
         if (!shell.isRoot)
-            exitProcess(-1)
+            return
 
         grantPermissions(shell)
 
@@ -59,8 +72,10 @@ class Application : Application() {
         coroutineScope.launch {
             Thread.sleep(3000)
 
-            daemonClient = DaemonClient()
+            _daemonClient = DaemonClient()
         }
+
+        _initialized = true
     }
 
     private fun grantPermissions(shell: Shell) {
@@ -111,5 +126,5 @@ class Application : Application() {
         return "settings put secure enabled_accessibility_services $newEnabledServices"
     }
 
-    fun sendSettings(triggers: Triggers) = daemonClient?.send(triggers)
+    fun sendSettings(triggers: Triggers) = _daemonClient?.send(triggers)
 }

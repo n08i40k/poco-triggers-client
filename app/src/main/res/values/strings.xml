@@ -1,15 +1,32 @@
 <resources>
     <string name="app_name" translatable="false">AOSP Triggers</string>
-    <string name="accessibility_service_description">Necessary to change settings depending on the currently open application.</string>
+    <string name="app_name_0" translatable="false">AOSP</string>
+    <string name="app_name_1" translatable="false">Triggers</string>
     <string name="accessibility_service_label" translatable="false">AOSP Triggers</string>
-    <string name="app_main_description">Hello!\n\nThis app is designed to emulate screen taps using triggers.\nIt may not work on all firmware or devices except POCO F4 GT.\nPlease take this into account.\n\nIf you think the app should work on your firmware or device, but the app does not work, create an issue on the project\'s GitHub page.\n\nQuick guide:\n- To display the menu for setting up the click positions, turn on 2 triggers at the same time, or one 2 times in a row.\n- To turn on/off a specific trigger, in the settings menu, click on it 2 times.\n- The upper trigger is the red circle.\n- The lower trigger is the blue circle.</string>
-    <string name="root_required_title">Root rights required!</string>
-    <string name="root_required_message">For the application to work, you must allow the application to use root rights.</string>
-    <string name="exit">Exit</string>
+    <string name="accessibility_service_description">Necessary to change settings depending on the currently open application.</string>
+
+    <string name="welcome_title">Hello!</string>
+    <string name="welcome_text">This app is designed to emulate screen taps using triggers.\nIt may not work on all firmware or devices except POCO F4 GT.\nPlease take this into account.\n\nIf you think the app should work on your firmware or device, but the app does not work, create an issue on the project\'s GitHub page.</string>
+    <string name="continue_button">Continue</string>
+
+    <string name="try_again">Try again</string>
+
     <string name="overlay_channel_name">Overlay status</string>
     <string name="overlay_channel_description">Status notifications for overlay</string>
     <string name="overlay_status_title">Overlay is running…</string>
     <string name="overlay_status_desc">Ignore this ;)</string>
-    <string name="ok" translatable="false">OK</string>
     <string name="overlay_warn_will_not_be_saved">You changing the settings for the excluded application, but they will not be saved.\nTo change the settings, go to another application.</string>
+    <string name="app_main_warning">In the initial setup in each application, the triggers are turned off by default!!!\n\nDon\'t forget to turn them on by double-tapping in a circle.</string>
+    <string name="no_root_again">Root-rights still not granted!</string>
+    <string name="no_root_title">No root-rights!</string>
+    <string name="no_root_text">Root permissions are required for the application to work!\nGrant root permissions to the application and click the \"Try again\" button.</string>
+    <string name="status_button_daemon">Daemon</string>
+    <string name="status_button_socket">Client Socket</string>
+    <string name="status_button_accessibility">Accessibility Service</string>
+    <string name="faq_daemon_title">Daemon (aka. Server)</string>
+    <string name="faq_daemon_client_title">Daemon Client (aka. Daemon Socket)</string>
+    <string name="faq_aservice_title">Accessibility Service</string>
+    <string name="faq_daemon_description">A C++ binary running on a device that:\n| Blocks direct transmission of screen click events to the OS, intercepting them for modification.\n| Tracks hardware triggers and when they are pressed/released, emulates the corresponding touches using a virtual uinput device.\n| Starts an internal server, to receive settings from the client.\n\nIf the button is red, create an issue in the project repository.</string>
+    <string name="faq_daemon_client_description">A class for sending settings to the daemon.\n\nIt will work after opening any application other than this one, and only if the daemon and accessibility service are working properly.</string>
+    <string name="faq_aservice_description">Designed to keep track of currently open apps, i.e. to work customizations for each application.\n\nIf he button is red, then try the following steps:\n- Exit the app.\n- Open settings and find the app.\n- Tap \"Force close\".\n- Go back to the app.</string>
 </resources>
