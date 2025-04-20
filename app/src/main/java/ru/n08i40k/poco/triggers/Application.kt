@@ -43,7 +43,7 @@ class Application : Application() {
 
         super.onCreate()
 
-//        init()
+        init()
     }
 
     override fun onTerminate() {
@@ -53,6 +53,9 @@ class Application : Application() {
     }
 
     fun init() {
+        if (initialized)
+            return
+
         if (_daemonClient != null) {
             _daemonClient!!.close()
             _daemonClient = null

@@ -3,7 +3,7 @@ package ru.n08i40k.poco.triggers.daemon
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.update
 import ru.n08i40k.poco.triggers.Application
 import ru.n08i40k.poco.triggers.BuildConfig
 import java.io.File
@@ -95,7 +95,7 @@ object DaemonBridge {
     fun stop() {
         Shell.cmd("pkill -f $EXECUTABLE_NAME").exec()
 
-        runBlocking { _initialized.emit(false) }
+        _initialized.update { false }
     }
 
     /**
@@ -106,8 +106,10 @@ object DaemonBridge {
     fun start(force: Boolean = false) {
         if (force)
             stop()
-        else if (started)
+        else if (started) {
+            _initialized.update { true }
             return
+        }
 
         Shell
             .getShell()
@@ -118,6 +120,6 @@ object DaemonBridge {
             )
             .submit()
 
-        runBlocking { _initialized.emit(true) }
+        _initialized.update { true }
     }
 }

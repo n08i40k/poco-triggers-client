@@ -16,6 +16,8 @@ import java.nio.file.WatchKey
 import java.nio.file.WatchService
 
 class LogsViewModel : ViewModel() {
+    private var attached = false
+
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
     private val file = DaemonBridge.logFile
@@ -35,7 +37,12 @@ class LogsViewModel : ViewModel() {
             _line.emit(randomAccessFile.readLine())
     }
 
-    init {
+    fun attach() {
+        if (attached)
+            return
+
+        attached = true
+
         runBlocking { read() }
 
         coroutineScope.launch {

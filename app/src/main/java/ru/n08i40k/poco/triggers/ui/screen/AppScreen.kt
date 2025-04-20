@@ -37,7 +37,7 @@ private fun AppInnerScreen() {
         if (showHello)
             "hello"
         else if (nonRoot)
-            "non-root"
+            "no-root"
         else
             "status",
         Modifier.fillMaxSize()
@@ -45,13 +45,13 @@ private fun AppInnerScreen() {
         composable("hello") {
             HelloScreen {
                 if (nonRoot)
-                    nav("hello", "non-root")
+                    nav("hello", "no-root")
                 else
                     nav("hello", "status")
             }
         }
 
-        composable("non-root") { NoRootScreen() }
+        composable("no-root") { NoRootScreen() }
 
         composable("status") { StatusScreen() }
     }
